@@ -1,0 +1,13 @@
+**/NPZ
+**/GLB
+**/FBX
+**/Data
+**.pt
+**.mp4
+**.mov
+**/__pycache__/
+__pycache__/
+*.egg-info/
+build/
+dist/
+.manifold_cache
