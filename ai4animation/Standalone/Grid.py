@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 import pyray as pr
 import raylib as rl
 from ai4animation.Components.Component import Component

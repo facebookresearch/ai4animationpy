@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 from ai4animation.AI4Animation import AI4Animation
 from ai4animation.Components.Component import Component
 from ai4animation.Math import Quaternion, Vector3

@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 import warnings
 
 import matplotlib.pyplot as plt

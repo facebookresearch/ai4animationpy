@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 from typing import List, Optional
 
 from ai4animation.Components.Actor import Actor

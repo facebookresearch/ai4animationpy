@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 from enum import Enum
 
 from ai4animation.Math import Tensor, Transform

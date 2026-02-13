@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 from . import Autoencoder, CodebookMatching, ConditionalFlow, Flow, MLP
 
 __all__ = [

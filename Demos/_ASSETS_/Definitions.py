@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 RootName = "root_joint"
 HipName = "pelvis_joint"
 NeckName = "neck_joint"

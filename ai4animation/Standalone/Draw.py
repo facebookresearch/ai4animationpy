@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 import raylib as rl
 from ai4animation import Utility
 from ai4animation.AI4Animation import AI4Animation

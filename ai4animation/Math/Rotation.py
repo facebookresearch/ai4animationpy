@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 from ai4animation.Math import Quaternion, Tensor, Transform
 
 

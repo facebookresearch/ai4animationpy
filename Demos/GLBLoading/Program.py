@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 from ai4animation import Actor, AI4Animation, AssetManager, Motion, Time
 from Trinity import v3 as Trinity
 

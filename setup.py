@@ -1,4 +1,5 @@
 # pyre-unsafe
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 from pathlib import Path
 
 from setuptools import find_packages, setup
