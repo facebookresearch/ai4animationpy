@@ -1,3 +1,5 @@
+# AI4AnimationPy
+
 ## Usage
 To setup an environment, run the conda setup for your platform below
 
@@ -33,3 +35,8 @@ pip install torch torchvision torchaudio onnx raylib numpy scipy matplotlib scik
 pip install onnxruntime
 pip install -e ${HOME}/fbsource/fbcode/ai4animationpy --no-dependencies
 ```
+
+## Copyright Information
+
+AI4AnimationPy is licensed under the CC BY-NC 4.0 License. A copy of the license can be found
+[here](LICENSE).
