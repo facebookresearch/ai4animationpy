@@ -1,6 +1,15 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-from ai4animation import Actor, AI4Animation, AssetManager, Motion, Time
-from Trinity import v3 as Trinity
+import os
+import sys
+from pathlib import Path
+
+from ai4animation import Actor, AI4Animation, Motion, Time
+
+SCRIPT_DIR = Path(__file__).parent
+ASSETS_PATH = str(SCRIPT_DIR.parent / "_ASSETS_/Trinity3")
+
+sys.path.append(ASSETS_PATH)
+import Definitions
 
 
 class Program:
@@ -9,7 +18,7 @@ class Program:
 
     def Start(self):
         glb_motion = Motion.LoadFromGLB(
-            self.Path, names=Trinity.FULL_BODY_NAMES, floor=None
+            self.Path, names=Definitions.FULL_BODY_NAMES, floor=None
         )
         glb_motion.SaveToNPZ(glb_motion.Name)
         npz_motion = Motion.LoadFromNPZ(glb_motion.Name)
@@ -20,8 +29,8 @@ class Program:
 
         self.Actor = AI4Animation.Scene.AddEntity("Actor").AddComponent(
             Actor,
-            AssetManager.GetPath("Trinity/v3.glb"),
-            Trinity.FULL_BODY_NAMES,
+            os.path.join(ASSETS_PATH, "Model.glb"),
+            Definitions.FULL_BODY_NAMES,
         )
 
     def Update(self):
@@ -46,7 +55,7 @@ class Program:
 
 
 def main():
-    AI4Animation(Program("MD1_X0110_Breakdance_10_A3_C3D_A.glb"))
+    AI4Animation(Program("Motion.glb"))
 
 
 if __name__ == "__main__":

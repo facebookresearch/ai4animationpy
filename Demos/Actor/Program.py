@@ -6,7 +6,7 @@ from pathlib import Path
 from ai4animation import Actor, AI4Animation, Rotation, Tensor, Time, Vector3
 
 SCRIPT_DIR = Path(__file__).parent
-ASSETS_PATH = str(SCRIPT_DIR.parent / "_ASSETS_")
+ASSETS_PATH = str(SCRIPT_DIR.parent / "_ASSETS_/Trinity3")
 
 sys.path.append(ASSETS_PATH)
 import Definitions
@@ -33,7 +33,7 @@ class Program:
         #         1.0 + Tensor.Abs(Tensor.Sin(2 * Time.TotalTime)),
         #     )
         # )
-        # self.Actor.SyncFromScene()
+        self.Actor.SyncFromScene()
 
 
 def main():

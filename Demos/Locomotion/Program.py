@@ -1,17 +1,15 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 import os
-import pathlib
+import sys
+from pathlib import Path
 
-import AnimRig
-import AnimRig as Definitions
-import Manifold
+import Manifold  # @fb-only
 import numpy as np
 import raylib as rl
 import torch
 from ai4animation import (
     Actor,
     AI4Animation,
-    AssetManager,
     FABRIK,
     FeedTensor,
     GuidanceModule,
@@ -28,6 +26,12 @@ from ai4animation import (
 from LegIK import LegIK
 from Sequence import Sequence
 
+SCRIPT_DIR = Path(__file__).parent
+ASSETS_PATH = str(SCRIPT_DIR.parent / "_ASSETS_/AnimRig")
+
+sys.path.append(ASSETS_PATH)
+import Definitions as AnimRig
+
 MIN_TIMESCALE = 1.0
 MAX_TIMESCALE = 1.5
 SYNCHRONIZATION_SENSITIVITY = 5
@@ -42,17 +46,20 @@ class Program:
     def Start(self):
         self.Actor = AI4Animation.Scene.AddEntity("Actor").AddComponent(
             Actor,
-            AssetManager.GetPath("Assets/AnimRig/Model.glb"),
-            Definitions.FULL_BODY_NAMES,
+            os.path.join(ASSETS_PATH, "Model.glb"),
+            AnimRig.FULL_BODY_NAMES,
             True,
         )
         AI4Animation.Standalone.Camera.SetTarget(self.Actor.Entity)
 
-        manifold_path = (
-            "ai4animation/tree/demos/locomotion/codebook_matchingTraining_New_30.pt"
-        )
-        local_path = Manifold.Download(manifold_path)
         device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        local_path = SCRIPT_DIR / "Network.pt"  # @oss-only
+        manifold_path = (  # @fb-only
+            "ai4animation/tree/demos/locomotion/codebook_matching/Training_New_30.pt"  # @fb-only
+        )  # @fb-only
+        local_path = Manifold.Download(manifold_path)  # @fb-only
+        print("Loading model from:", local_path)
         self.Model = torch.load(local_path, weights_only=False, map_location=device)
 
         self.Model.eval()
@@ -79,7 +86,7 @@ class Program:
         directory = "Guidances"
         for path in os.listdir(directory):
             with np.load(directory + "/" + path, allow_pickle=True) as data:
-                id = pathlib.Path(path).stem
+                id = Path(path).stem
                 names = data["Names"]
                 positions = data["Positions"]
                 self.GuidanceTemplates[id] = GuidanceModule.Guidance(

@@ -1,14 +1,15 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 import datetime
 import os
+import sys
 from functools import lru_cache
+from pathlib import Path
 
-import Manifold
+import Manifold  # @fb-only
 import torch
 from ai4animation import (
     Actor,
     AI4Animation,
-    AssetManager,
     Component,
     FABRIK,
     FeedTensor,
@@ -25,7 +26,12 @@ from ai4animation import (
     Vector3,
 )
 from tqdm import tqdm
-from Trinity import v3 as Definitions
+
+SCRIPT_DIR = Path(__file__).parent
+ASSETS_PATH = str(SCRIPT_DIR.parent / "_ASSETS_/Trinity3")
+
+sys.path.append(ASSETS_PATH)
+import Definitions
 
 try:
     from .Grounding import Grounding
@@ -46,7 +52,7 @@ class Program:
     def Start(self) -> None:
         self.Actor = AI4Animation.Scene.AddEntity("Actor").AddComponent(
             Actor,
-            AssetManager.GetPath("Trinity/v3.glb"),
+            os.path.join(ASSETS_PATH, "Model.glb"),
             Definitions.FULL_BODY_NAMES_WITH_HANDS,
         )
         self.CxM = self.Actor.Entity.AddComponent(CodebookMatching, self)
@@ -55,14 +61,14 @@ class Program:
     def Standalone(self):
         self.SourceActor = AI4Animation.Scene.AddEntity("Source Actor").AddComponent(
             Actor,
-            AssetManager.GetPath("Trinity/v3.glb"),
+            os.path.join(ASSETS_PATH, "Model.glb"),
             Definitions.FULL_BODY_NAMES_WITH_HANDS,
         )
         self.GroundedActor = AI4Animation.Scene.AddEntity(
             "Grounded Actor"
         ).AddComponent(
             Actor,
-            AssetManager.GetPath("Trinity/v3.glb"),
+            os.path.join(ASSETS_PATH, "Model.glb"),
             Definitions.FULL_BODY_NAMES_WITH_HANDS,
         )
         self.SourceActor.SkinnedMesh.SetColor(AI4Animation.Color.RED)
@@ -123,7 +129,7 @@ class Program:
                 self.CxM.Mirror,
             )
 
-    def RefineMotion(self, source_motion, grounding=True, SaveToNPZ=False) -> Motion:
+    def RefineMotion(self, source_motion, grounding=True) -> Motion:
         if AI4Animation.RunMode != AI4Animation.Mode.MANUAL:
             print("RefineMotion: Create AI4Animation in MANUAL mode")
             return
@@ -174,16 +180,6 @@ class Program:
                     "Delta Time": round(Time.DeltaTime, 3),
                 }
             )
-        if SaveToNPZ:
-            output_dir = os.path.join(
-                str(AssetManager.GetRoot()),
-                "Trinity",
-                "Data",
-                "v3",
-                "Emotes",
-                "Refined",
-            )
-            result.SaveToNPZ(absolute_path=os.path.join(output_dir, result.Name))
         return result
 
     def AnimateActor(self, actor, motion, rootmodule, timestamp, mirror):
@@ -199,23 +195,22 @@ class Program:
 
 @lru_cache(maxsize=5)
 def _LoadModel(
-    model_path: str, force_redownload: bool = False, weights_only: bool = False
+    local_path: str,
+    manifold_path: str,
+    force_redownload: bool = False,
+    weights_only: bool = False,
 ):
-    print(f"loading model: [{model_path}] ...")
-
-    model_path_resolved = Manifold.Download(
-        model_path, force_redownload=force_redownload
-    )
-
-    print(f"{model_path_resolved=}")
+    model_path = local_path  # @oss-only
+    model_path = Manifold.Download(  # @fb-only
+        manifold_path,  # @fb-only
+        force_redownload=force_redownload,  # @fb-only
+    )  # @fb-only
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = torch.load(
-        model_path_resolved, weights_only=weights_only, map_location=device
-    )
+    model = torch.load(model_path, weights_only=weights_only, map_location=device)
 
     print(f"[{model_path}] loaded ...")
-
+    model.eval()
     return model
 
 
@@ -225,27 +220,26 @@ class CodebookMatching(Component):
         self.Actor = self.Program.Actor
 
         self.LowerBodyModel = _LoadModel(
+            SCRIPT_DIR / "LowerbodyNetwork.pt",
             "ai4animation/tree/demos/motion_tracking/v0.5.0/Lowerbody_17.pt",
             force_redownload=False,
             weights_only=False,
         )
         self.LowerBodyModelIterations = 3
-        self.LowerBodyModel.eval()
 
         self.UpperBodyModel = _LoadModel(
+            SCRIPT_DIR / "UpperbodyNetwork.pt",
             "ai4animation/tree/demos/motion_tracking/v0.5.0/Upperbody_30.pt",
             force_redownload=False,
             weights_only=False,
         )
-        self.UpperBodyModel.eval()
 
         self.HandModel = _LoadModel(
+            SCRIPT_DIR / "HandNetwork.pt",
             "ai4animation/tree/demos/motion_tracking/v0.5.0/Hand_70.pt",
             force_redownload=False,
             weights_only=False,
         )
-
-        self.HandModel.eval()
 
         self.PredictionFPS = 30
         self.SequenceLength = 16
@@ -955,9 +949,10 @@ class CodebookMatching(Component):
 
 def main():
     Time.Timescale = 1.0
-    local_glb_path = Manifold.Download(
-        "ai4animation/tree/assets/Trinity/Data/v3/Emotes/reels/reels000.glb"
-    )
+    local_glb_path = SCRIPT_DIR / "Motion.glb"  # @oss-only
+    local_glb_path = Manifold.Download(  # @fb-only
+        "ai4animation/tree/assets/Trinity/Data/v3/Emotes/reels/reels000.glb"  # @fb-only
+    )  # @fb-only
     motion = Motion.LoadFromGLB(
         local_glb_path, names=Definitions.FULL_BODY_NAMES_WITH_HANDS, floor=None
     )

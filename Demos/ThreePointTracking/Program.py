@@ -1,12 +1,13 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-import AnimRig
-import AnimRig as Definitions
-import Manifold
+import os
+import sys
+from pathlib import Path
+
+import Manifold  # @fb-only
 import torch
 from ai4animation import (
     Actor,
     AI4Animation,
-    AssetManager,
     ContactModule,
     Dataset,
     FABRIK,
@@ -23,6 +24,12 @@ from ai4animation import (
     Transform,
     Vector3,
 )
+
+SCRIPT_DIR = Path(__file__).parent
+ASSETS_PATH = str(SCRIPT_DIR.parent / "_ASSETS_/AnimRig")
+
+sys.path.append(ASSETS_PATH)
+import Definitions as AnimRig
 from LegIK import LegIK
 from Sequence import Sequence
 
@@ -43,36 +50,31 @@ MAX_FILES = None
 class Program:
     def Start(self):
         dataset = Dataset(
-            # AssetManager.GetPath("AnimRig/Data/Cranberry/S01"),
-            # AssetManager.GetPath("Playbacks"),
-            Manifold.Download("ai4animation/tree/demos/3pt/Playbacks"),
-            # Utility.DownloadFileFromManifold(
-            #     "ai4animation/tree/demos/3pt/Playback_1.npz",
-            #     force_redownload=True,
-            # ),
+            os.path.join(SCRIPT_DIR, "Playbacks"),  # @oss-only
+            Manifold.Download("ai4animation/tree/demos/3pt/Playbacks"),  # @fb-only
             [
                 lambda x: RootModule(
                     x,
-                    Definitions.HipName,
-                    Definitions.LeftHipName,
-                    Definitions.RightHipName,
-                    Definitions.LeftShoulderName,
-                    Definitions.RightShoulderName,
+                    AnimRig.HipName,
+                    AnimRig.LeftHipName,
+                    AnimRig.RightHipName,
+                    AnimRig.LeftShoulderName,
+                    AnimRig.RightShoulderName,
                 ),
                 lambda x: MotionModule(x),
                 lambda x: TrackingModule(
                     x,
-                    Definitions.HeadName,
-                    Definitions.LeftWristName,
-                    Definitions.RightWristName,
+                    AnimRig.HeadName,
+                    AnimRig.LeftWristName,
+                    AnimRig.RightWristName,
                 ),
                 lambda x: ContactModule(
                     x,
                     [
-                        (Definitions.LeftAnkleName, 0.1, 0.25),
-                        (Definitions.LeftBallName, 0.05, 0.25),
-                        (Definitions.RightAnkleName, 0.1, 0.25),
-                        (Definitions.RightBallName, 0.05, 0.25),
+                        (AnimRig.LeftAnkleName, 0.1, 0.25),
+                        (AnimRig.LeftBallName, 0.05, 0.25),
+                        (AnimRig.RightAnkleName, 0.1, 0.25),
+                        (AnimRig.RightBallName, 0.05, 0.25),
                     ],
                 ),
             ],
@@ -82,33 +84,36 @@ class Program:
         self.Editor = AI4Animation.Scene.AddEntity("Editor").AddComponent(
             MotionEditor,
             dataset,
-            AssetManager.GetPath("Assets/AnimRig/Model.glb"),
-            Definitions.FULL_BODY_NAMES,
+            os.path.join(ASSETS_PATH, "Model.glb"),
+            AnimRig.FULL_BODY_NAMES,
         )
 
         self.Actor = AI4Animation.Scene.AddEntity("Actor").AddComponent(
             Actor,
-            AssetManager.GetPath("Assets/AnimRig/Model.glb"),
-            Definitions.FULL_BODY_NAMES,
+            os.path.join(ASSETS_PATH, "Model.glb"),
+            AnimRig.FULL_BODY_NAMES,
             True,
         )
         AI4Animation.Standalone.Camera.SetTarget(self.Actor.Entity)
 
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        anticipation_local_path = SCRIPT_DIR / "AnticipationNetwork.pt"  # @oss-only
+        anticipation_local_path = Manifold.Download(  # fb-only
+            "ai4animation/tree/demos/3pt/Network_Anticipation_E=150.pt",  # fb-only
+            force_redownload=False,  # fb-only
+        )  # fb-only
         self.AnticipationModel = torch.load(
-            Manifold.Download(
-                "ai4animation/tree/demos/3pt/Network_Anticipation_E=150.pt",
-                force_redownload=False,
-            ),
-            weights_only=False,
+            anticipation_local_path, weights_only=False, map_location=device
         )
         self.AnticipationModel.eval()
-
+        motion_local_path = SCRIPT_DIR / "MotionNetwork.pt"  # @oss-only
+        motion_local_path = Manifold.Download(  # fb-only
+            "ai4animation/tree/demos/3pt/Network_Motion_E=150.pt",  # fb-only
+            force_redownload=False,  # fb-only
+        )  # fb-only
         self.MotionModel = torch.load(
-            Manifold.Download(
-                "ai4animation/tree/demos/3pt/Network_Motion_E=150.pt",
-                force_redownload=False,
-            ),
-            weights_only=False,
+            motion_local_path, weights_only=False, map_location=device
         )
         self.MotionModel.eval()
 
@@ -137,7 +142,7 @@ class Program:
 
         self.RootControl = RootModule.Series(self.SequenceSeries)
         self.MotionControl = MotionModule.Series(
-            self.SequenceSeries, Definitions.FULL_BODY_NAMES
+            self.SequenceSeries, AnimRig.FULL_BODY_NAMES
         )
 
         self.Previous = None
@@ -171,10 +176,10 @@ class Program:
         self.Timestamp = Time.TotalTime
 
     def Update(self):
-        self.Editor.Actor.GetBone(Definitions.LeftHipName).Entity.SetScale(
+        self.Editor.Actor.GetBone(AnimRig.LeftHipName).Entity.SetScale(
             Vector3.Create(0.01, 0.01, 0.01)
         )
-        self.Editor.Actor.GetBone(Definitions.RightHipName).Entity.SetScale(
+        self.Editor.Actor.GetBone(AnimRig.RightHipName).Entity.SetScale(
             Vector3.Create(0.01, 0.01, 0.01)
         )
         # Update control every frame
@@ -277,7 +282,7 @@ class Program:
 
         # Motion Control
         transforms = Transform.TransformationTo(
-            self.MotionControl.GetTransforms(Definitions.THREE_POINT_NAMES), root
+            self.MotionControl.GetTransforms(AnimRig.THREE_POINT_NAMES), root
         )
         inputs.Feed(Transform.GetPosition(transforms))
         inputs.Feed(Transform.GetAxisZ(transforms))

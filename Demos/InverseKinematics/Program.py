@@ -1,9 +1,13 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+import os
 import sys
+from pathlib import Path
 
 from ai4animation import Actor, AI4Animation, FABRIK, Vector3
 
-ASSETS_PATH = "../_ASSETS_/"
+SCRIPT_DIR = Path(__file__).parent
+ASSETS_PATH = str(SCRIPT_DIR.parent / "_ASSETS_/AnimRig")
+
 sys.path.append(ASSETS_PATH)
 import Definitions
 
@@ -12,7 +16,7 @@ class Program:
     def Start(self):
         actor = AI4Animation.Scene.AddEntity("Actor")
         self.Actor = actor.AddComponent(
-            Actor, ASSETS_PATH + "Model.glb", Definitions.FULL_BODY_NAMES
+            Actor, os.path.join(ASSETS_PATH, "Model.glb"), Definitions.FULL_BODY_NAMES
         )
 
         self.IK = FABRIK(
@@ -52,5 +56,5 @@ def main():
     AI4Animation(Program(), mode=AI4Animation.Mode.STANDALONE)
 
 
-if __name__ == "___main__":
+if __name__ == "__main__":
     main()

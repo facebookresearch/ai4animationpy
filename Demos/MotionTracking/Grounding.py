@@ -1,5 +1,8 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-import Manifold
+import sys
+from pathlib import Path
+
+import Manifold  # @fb-only
 import torch
 from ai4animation import (
     FeedTensor,
@@ -12,16 +15,23 @@ from ai4animation import (
     Transform,
 )
 from tqdm import tqdm
-from Trinity import v3 as Definitions
+
+SCRIPT_DIR = Path(__file__).parent
+ASSETS_PATH = str(SCRIPT_DIR.parent / "_ASSETS_/Trinity3")
+
+sys.path.append(ASSETS_PATH)
+import Definitions
 
 
 class Grounding:
     def __init__(self):
+        local_model_path = SCRIPT_DIR / "GroundingNetwork.pt"  # @oss-only
+        local_model_path = Manifold.Download(  # @fb-only
+            "ai4animation/tree/demos/motion_tracking/v0.5.0/Grounding_150.pt",  # @fb-only
+            force_redownload=False,  # @fb-only
+        )  # @fb-only
         self.Model = torch.load(
-            Manifold.Download(
-                "ai4animation/tree/demos/motion_tracking/v0.5.0/Grounding_150.pt",
-                force_redownload=False,
-            ),
+            local_model_path,
             weights_only=False,
             map_location="cuda" if torch.cuda.is_available() else "cpu",
         )

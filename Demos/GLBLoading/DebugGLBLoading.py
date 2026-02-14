@@ -1,7 +1,10 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+import os
+import sys
+from pathlib import Path
+
 from ai4animation import (
     AI4Animation,
-    AssetManager,
     ContactModule,
     Dataset,
     Motion,
@@ -10,7 +13,12 @@ from ai4animation import (
     RootModule,
     Transform,
 )
-from Trinity import v3 as Definitions
+
+SCRIPT_DIR = Path(__file__).parent
+ASSETS_PATH = str(SCRIPT_DIR.parent / "_ASSETS_/Trinity3")
+
+sys.path.append(ASSETS_PATH)
+import Definitions
 
 
 class Program:
@@ -53,7 +61,7 @@ class Program:
                     ),
                 ],
             ),
-            AssetManager.GetPath("Trinity/v3.glb"),
+            os.path.join(ASSETS_PATH, "Model.glb"),
             Definitions.FULL_BODY_NAMES_WITH_HANDS,
         )
 
@@ -78,4 +86,4 @@ class Program:
         AI4Animation.Draw.Transform(self.Pose, size=0.25, axisSize=0)
 
 
-AI4Animation(Program("MD1_X0089.Tiktok_electro_19_A3_A"))
+AI4Animation(Program("Motion"))

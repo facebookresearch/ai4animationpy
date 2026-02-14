@@ -7,6 +7,9 @@ from setuptools import find_packages, setup
 this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
+_packages = find_packages()  # @oss-only
+_packages = find_packages() + ["AnimRig", "Trinity", "Manifold"]  # @fb-only
+
 setup(
     name="ai4animation",
     version="1.0.0",
@@ -14,7 +17,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Paul Starke, Sebastian Starke",
-    packages=find_packages() + ["AnimRig", "Trinity", "Manifold"],  # @fb-only
+    packages=_packages,
     package_dir={
         "ai4animation": "ai4animation",
         "AnimRig": "Assets/AnimRig",  # @fb-only

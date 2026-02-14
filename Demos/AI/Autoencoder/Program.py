@@ -1,6 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+import os
 import sys
-import time
+from pathlib import Path
 
 import torch
 from ai4animation import (
@@ -25,7 +26,9 @@ from ai4animation import (
     Vector3,
 )
 
-ASSETS_PATH = "../../_ASSETS_/"
+SCRIPT_DIR = Path(__file__).parent
+ASSETS_PATH = str(SCRIPT_DIR.parent.parent / "_ASSETS_/AnimRig")
+
 sys.path.append(ASSETS_PATH)
 import Definitions
 
@@ -41,7 +44,7 @@ class Program:
         Utility.SetSeed(23456)
 
         self.Dataset = Dataset(
-            ASSETS_PATH + "Motions",
+            os.path.join(ASSETS_PATH, "Motions"),
             [
                 lambda x: RootModule(
                     x,
@@ -102,11 +105,11 @@ class Program:
         self.Editor = entity.AddComponent(
             MotionEditor,
             self.Dataset,
-            ASSETS_PATH + "Model.glb",
+            os.path.join(ASSETS_PATH, "Model.glb"),
             Definitions.FULL_BODY_NAMES,
         )
         self.Actor = AI4Animation.Scene.AddEntity("Actor").AddComponent(
-            Actor, ASSETS_PATH + "Model.glb", Definitions.FULL_BODY_NAMES
+            Actor, os.path.join(ASSETS_PATH, "Model.glb"), Definitions.FULL_BODY_NAMES
         )
         AI4Animation.Standalone.Camera.SetTarget(self.Actor.Entity)
 
@@ -138,18 +141,15 @@ class Program:
 
         inputs = FeedTensor("X", (len(timestamps), FEATURE_DIM))
 
-        # root = motion.GetModule(RootModule).GetRootTransformations(timestamps, mirrored=mirrored)
         root = Tensor.Inverse(
             motion.GetModule(RootModule).GetTransforms(timestamps, mirrored=mirrored)
         )
 
         # Inputs
-        # transforms = Transform.TransformationTo(
         transforms = Transform.TransformationFrom(
             motion.GetBoneTransformations(timestamps, mirrored=mirrored),
             root.reshape(-1, 1, 4, 4),
         )
-        # velocities = Vector3.DirectionTo(
         velocities = Vector3.DirectionFrom(
             motion.GetBoneVelocities(timestamps, mirrored=mirrored),
             root.reshape(-1, 1, 4, 4),

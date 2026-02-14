@@ -2,9 +2,10 @@
 **/GLB
 **/FBX
 **/Data
-**.pt
-**.mp4
-**.mov
+**/Assets/**.pt
+**/Assets/**.npz
+**/Training/**.pt
+**/Checkpoints/**.pt
 **/__pycache__/
 __pycache__/
 *.egg-info/

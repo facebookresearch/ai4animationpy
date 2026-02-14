@@ -1,6 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+import os
 import sys
-import time
+from pathlib import Path
 
 import torch
 from ai4animation import (
@@ -25,7 +26,8 @@ from ai4animation import (
     Vector3,
 )
 
-ASSETS_PATH = "../../_ASSETS_/"
+SCRIPT_DIR = Path(__file__).parent
+ASSETS_PATH = str(SCRIPT_DIR.parent.parent / "_ASSETS_/AnimRig")
 sys.path.append(ASSETS_PATH)
 import Definitions
 
@@ -40,7 +42,7 @@ class Program:
         Utility.SetSeed(23456)
 
         self.Dataset = Dataset(
-            ASSETS_PATH + "Motions",
+            os.path.join(ASSETS_PATH, "Motions"),
             [
                 lambda x: RootModule(
                     x,
@@ -99,7 +101,7 @@ class Program:
         self.Editor = AI4Animation.Scene.AddEntity("Trainer").AddComponent(
             MotionEditor,
             self.Dataset,
-            ASSETS_PATH + "Model.glb",
+            os.path.join(ASSETS_PATH, "Model.glb"),
             Definitions.FULL_BODY_NAMES,
         )
         AI4Animation.Standalone.Camera.SetTarget(self.Editor.Actor.Entity)

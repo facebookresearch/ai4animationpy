@@ -1,5 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+import os
 import sys
+from pathlib import Path
 
 from ai4animation import (
     AI4Animation,
@@ -10,7 +12,9 @@ from ai4animation import (
     RootModule,
 )
 
-ASSETS_PATH = "../_ASSETS_/"
+SCRIPT_DIR = Path(__file__).parent
+ASSETS_PATH = str(SCRIPT_DIR.parent / "_ASSETS_/AnimRig")
+
 sys.path.append(ASSETS_PATH)
 import Definitions
 
@@ -22,7 +26,7 @@ class Program:
         editor.AddComponent(
             MotionEditor,
             Dataset(
-                ASSETS_PATH + "Motions",
+                os.path.join(ASSETS_PATH, "Motions"),
                 [
                     lambda x: RootModule(
                         x,
@@ -44,7 +48,7 @@ class Program:
                     ),
                 ],
             ),
-            ASSETS_PATH + "Model.glb",
+            os.path.join(ASSETS_PATH, "Model.glb"),
             Definitions.FULL_BODY_NAMES,
         )
 

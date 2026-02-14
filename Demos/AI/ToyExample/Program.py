@@ -59,8 +59,6 @@ class Program:
             self.LossHistory.Print()
 
     def GetInput(self):
-        # requires batchxdim | 32 x xBatch-yBatch
-        # sample_index_array mappend auf file und frame_index -> uniform ueber datensatz samplen
         x = np.random.uniform(0, 1, self.BatchSize)
         x = x.reshape(self.BatchSize, 1)
         return x
