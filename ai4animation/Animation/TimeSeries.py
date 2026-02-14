@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 from ai4animation import Utility
 from ai4animation.Math import Tensor
 

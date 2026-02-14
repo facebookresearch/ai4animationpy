@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 from abc import ABC, abstractmethod
 
 from ai4animation.AI4Animation import AI4Animation

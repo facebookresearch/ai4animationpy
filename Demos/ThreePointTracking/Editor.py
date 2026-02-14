@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 import AnimRig as Definitions
 from ai4animation import (
     AI4Animation,

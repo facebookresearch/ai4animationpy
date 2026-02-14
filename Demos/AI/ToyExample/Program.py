@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 import numpy as np
 import torch
 from ai4animation import AdamW, AI4Animation, CyclicScheduler, MLP, Plotting, Tensor

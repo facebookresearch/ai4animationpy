@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 import torch
 import torch.nn as nn
 from ai4animation.AI import Modules, Stats

@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 import math
 
 from ai4animation import AI4Animation, Utility

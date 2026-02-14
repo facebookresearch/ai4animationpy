@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 import numpy as np
 import onnxruntime as ort
 import torch

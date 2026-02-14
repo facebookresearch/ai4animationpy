@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 __version__ = "1.0.0"
 
 # Subpackages (import modules/packages, not classes yet to avoid circular imports)

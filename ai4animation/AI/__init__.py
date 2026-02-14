@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 from . import Manifolds, Modules, Plotting, Stats
 from .DataSampler import DataSampler
 from .FeedTensor import FeedTensor

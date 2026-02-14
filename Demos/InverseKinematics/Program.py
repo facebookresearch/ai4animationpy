@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 import sys
 
 from ai4animation import Actor, AI4Animation, FABRIK, Vector3

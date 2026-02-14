@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 import os
 
 from ai4animation.Animation.Motion import Motion

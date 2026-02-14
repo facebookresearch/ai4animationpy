@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 # v1 = Vector3.Create(1,2,3)
 # v2 = Vector3.Zero()
 # v3 = Vector3.Zero(5)
