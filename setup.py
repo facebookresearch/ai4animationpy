@@ -4,7 +4,7 @@ from pathlib import Path
 from setuptools import find_packages, setup
 
 this_directory = Path(__file__).parent
-long_description = (this_directory / "PlatformSetupInstuctions.md").read_text()
+long_description = (this_directory / "README.md").read_text()
 
 setup(
     name="ai4animation",
@@ -13,12 +13,12 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Paul Starke, Sebastian Starke",
-    packages=find_packages() + ["AnimRig", "Trinity", "Manifold"],
+    packages=find_packages() + ["AnimRig", "Trinity", "Manifold"],  # @fb-only
     package_dir={
         "ai4animation": "ai4animation",
-        "AnimRig": "Assets/AnimRig",
-        "Trinity": "Assets/Trinity",
-        "Manifold": "Assets/Manifold",
+        "AnimRig": "Assets/AnimRig",  # @fb-only
+        "Trinity": "Assets/Trinity",  # @fb-only
+        "Manifold": "Assets/Manifold",  # @fb-only
     },
     entry_points={
         "console_scripts": [
