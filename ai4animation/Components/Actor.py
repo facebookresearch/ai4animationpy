@@ -4,13 +4,17 @@ from typing import List
 from ai4animation import Utility
 from ai4animation.AI4Animation import AI4Animation
 from ai4animation.Components.Component import Component
-from ai4animation.Import.GLBImporter import GLB
 from ai4animation.Math import Quaternion, Rotation, Tensor, Transform, Vector3
-
 
 class Actor(Component):
     def Start(self, params):
-        self.GLB = GLB.Create(params[0])
+        model_path = params[0]
+        if model_path.lower().endswith(".fbx"):
+            from ai4animation.Import.FBXImporter import FBX
+            self.Model = FBX.Create(model_path)
+        else:
+            from ai4animation.Import.GLBImporter import GLB
+            self.Model = GLB.Create(model_path)
         self.Entities = self.CreateEntities()
 
         # Create Hierarchy
@@ -311,9 +315,9 @@ class Actor(Component):
             self.AssignZeroPose(names, Transforms, child)
 
     def CreateEntities(self):
-        names = self.GLB.JointNames
-        parents = self.GLB.JointParents
-        Transforms = self.GLB.JointMatrices
+        names = self.Model.JointNames
+        parents = self.Model.JointParents
+        Transforms = self.Model.JointMatrices
         entities = []
         for i in range(len(names)):
             entities.append(
@@ -350,7 +354,7 @@ class Actor(Component):
             "Show Labels", 0.05, 0.75, 0.9, 0.125, False, True, self.Canvas
         )
 
-        self.SkinnedMesh = AI4Animation.Standalone.CreateSkinnedMesh(self, self.GLB)
+        self.SkinnedMesh = AI4Animation.Standalone.CreateSkinnedMesh(self, self.Model)
 
     def Draw(self):
         boneSize = 0.0175

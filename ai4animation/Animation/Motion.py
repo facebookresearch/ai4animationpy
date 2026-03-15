@@ -254,6 +254,14 @@ class Motion:
             raise FileNotFoundError(f"GLB file not found: {absolute_path}")
         return GLB(absolute_path).LoadMotion(names=names, floor=floor)
 
+    @classmethod
+    def LoadFromFBX(cls, absolute_path, names=None, floor=None):
+        from ai4animation.Import.FBXImporter import FBX
+
+        if not os.path.isfile(absolute_path):
+            raise FileNotFoundError(f"FBX file not found: {absolute_path}")
+        return FBX(absolute_path).LoadMotion(names=names, floor=floor)
+
 
 class Hierarchy:
     def __init__(self, bone_names, parent_names):

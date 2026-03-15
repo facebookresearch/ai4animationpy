@@ -9,6 +9,7 @@
 **/__pycache__/
 __pycache__/
 *.egg-info/
+*.vscode/
 build/
 dist/
 .manifold_cache

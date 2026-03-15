@@ -11,7 +11,9 @@ from tqdm import tqdm
 
 
 class BatchConverter:
-    """Batch processor for converting GLB files to NPZ motion data"""
+    """Batch processor for converting GLB and FBX files to NPZ motion data"""
+
+    SUPPORTED_EXTENSIONS = (".glb", ".fbx")
 
     def __init__(
         self,
@@ -29,9 +31,9 @@ class BatchConverter:
             raise FileNotFoundError(f"Input directory not found: {input_directory}")
 
     def Run(self, bone_names, floor) -> List[str]:
-        glb_files = self.FindGLBs()
-        if not glb_files:
-            print(f"No GLB files found in {self.input_directory}")
+        files = self.FindFiles()
+        if not files:
+            print(f"No GLB or FBX files found in {self.input_directory}")
             return []
 
         output_paths = []
@@ -40,20 +42,20 @@ class BatchConverter:
         with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
             tasks = {
                 executor.submit(
-                    self.ProcessGLB,
+                    self.ProcessFile,
                     (
-                        glb_file,
+                        file,
                         self.input_directory,
                         self.output_directory,
                         bone_names,
                         floor,
                     ),
-                ): glb_file
-                for glb_file in glb_files
+                ): file
+                for file in files
             }
 
             with tqdm(
-                total=len(glb_files), unit="file", desc="[Converting GLB files]"
+                total=len(files), unit="file", desc="[Converting files]"
             ) as pbar:
                 for future in as_completed(tasks):
                     filename, output_path, success, error_msg = future.result()
@@ -74,39 +76,55 @@ class BatchConverter:
 
         return output_paths
 
-    def ProcessGLB(self, args):
-        glb_filename, input_directory, output_directory, bone_names, floor = args
+    def ProcessFile(self, args):
+        filename, input_directory, output_directory, bone_names, floor = args
         try:
-            glb_path = os.path.join(input_directory, glb_filename)
-            motion = Motion.LoadFromGLB(glb_path, bone_names, floor)
+            filepath = os.path.join(input_directory, filename)
+            ext = os.path.splitext(filename)[1].lower()
+
+            if ext == ".glb":
+                motion = Motion.LoadFromGLB(filepath, bone_names, floor)
+            elif ext == ".fbx":
+                motion = Motion.LoadFromFBX(filepath, bone_names, floor)
+            else:
+                raise ValueError(f"Unsupported file format: {ext}")
 
             # Preserve subfolder structure
-            relative_dir = os.path.dirname(glb_filename)
+            relative_dir = os.path.dirname(filename)
             target_output_dir = os.path.join(output_directory, relative_dir)
             os.makedirs(target_output_dir, exist_ok=True)
 
             output_path = motion.SaveToNPZ(
                 os.path.join(
                     target_output_dir,
-                    os.path.splitext(os.path.basename(glb_filename))[0],
+                    os.path.splitext(os.path.basename(filename))[0],
                 )
             )
-            return (glb_filename, output_path, True, None)
+            return (filename, output_path, True, None)
         except Exception as e:
-            return (glb_filename, None, False, str(e))
+            return (filename, None, False, str(e))
 
-    def FindGLBs(self) -> List[str]:
-        glb_files = []
+    def FindFiles(self) -> List[str]:
+        """Find all supported files (GLB and FBX) in the input directory."""
+        found_files = []
 
         for root, _, files in os.walk(self.input_directory):
             for file in files:
-                if file.lower().endswith(".glb"):
+                if file.lower().endswith(self.SUPPORTED_EXTENSIONS):
                     # Get relative path from input directory
                     relative_path = os.path.relpath(
                         os.path.join(root, file), self.input_directory
                     )
-                    glb_files.append(relative_path)
-        return sorted(glb_files)
+                    found_files.append(relative_path)
+        return sorted(found_files)
+
+    def FindGLBs(self) -> List[str]:
+        """Find GLB files only (for backwards compatibility)."""
+        return [f for f in self.FindFiles() if f.lower().endswith(".glb")]
+
+    def FindFBXs(self) -> List[str]:
+        """Find FBX files only."""
+        return [f for f in self.FindFiles() if f.lower().endswith(".fbx")]
 
 
 def Run(
@@ -122,10 +140,10 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Batch convert GLB files to NPZ motion data", prog="convert"
+        description="Batch convert GLB and FBX files to NPZ motion data", prog="convert"
     )
     parser.add_argument(
-        "--input_dir", required=True, help="Input directory containing GLB files"
+        "--input_dir", required=True, help="Input directory containing GLB or FBX files"
     )
     parser.add_argument(
         "--output_dir", help="Output directory for NPZ files (default: input_dir/NPZ)"

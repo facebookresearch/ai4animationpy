@@ -41,7 +41,9 @@ from .Entity import Entity
 # IK classes
 from .IK.FABRIK import FABRIK
 
-# Import classes
+# Importer
+from .Import import BVHImporter
+from .Import.FBXImporter import FBX
 from .Import.GLBImporter import GLB
 
 # Math classes - re-export for convenience
@@ -91,6 +93,8 @@ __all__ = [
     "FABRIK",
     # Import
     "GLB",
+    "FBX",
+    "BVHImporter",
     # AI
     "DataSampler",
     "Stats",

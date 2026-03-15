@@ -114,8 +114,8 @@ class Standalone:
     def LoadModule(self, name):
         return Utility.LoadModule(os.path.dirname(__file__) + "/" + name + ".py")
 
-    def CreateSkinnedMesh(self, actor, glb):
-        return self.LoadModule("SkinnedMesh").SkinnedMesh(actor, glb)
+    def CreateSkinnedMesh(self, actor, model):
+        return self.LoadModule("SkinnedMesh").SkinnedMesh(actor, model)
 
     class Color:
         BLACK = rl.colors.BLACK

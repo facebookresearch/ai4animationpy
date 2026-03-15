@@ -7,6 +7,7 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 from ai4animation.Animation.Motion import Hierarchy, Motion
+from ai4animation.Import.ModelImporter import Mesh, ModelImporter, Skin
 from ai4animation.Math import Quaternion, Tensor, Transform, Vector3
 from numpy.typing import NDArray
 from PIL import Image
@@ -82,45 +83,6 @@ class Animation:
         self.DeltaTime = 1 / framerate
         self.LocalTransformations = local_matrices
         self.GlobalTransformations = global_matrices
-
-
-class Skin:
-    def __init__(self, inverse_bind_mats, joints):
-        self.Inverse_bind_matrices = inverse_bind_mats
-        self.Joints = joints
-
-
-class Mesh:
-    def __init__(
-        self,
-        name,
-        vertices,
-        normals,
-        triangles,
-        skin_indices,
-        skin_weights,
-        tex_coord,
-        image,
-    ):
-        self.Name = name
-        self.Vertices = vertices  # [vertexcount,3]
-        self.VertexCount = self.Vertices.shape[0]
-        self.Normals = normals  # [vertexcount,3]
-        self.Triangles = triangles  # [trianglecount,1]
-        self.TriangleCount = int(triangles.shape[0] / 3)
-        self.SkinIndices = skin_indices
-        self.SkinWeights = skin_weights
-        self.HasSkinning = (
-            self.SkinIndices is not None
-            and self.SkinWeights is not None
-            and len(self.SkinIndices) > 0
-            and len(self.SkinWeights) > 0
-        )
-        self.TexCoord = tex_coord
-        self.Image = image
-        # print(image, tex_coord)
-        # print(f"Mesh: Name{name}, Vertices{type(vertices)}, Normals{type(normals)}, Triangles{type(triangles)}, SkinIndices {type(skin_indices)}, SkinWeights{type(skin_weights)}")
-        # print(f"Mesh: Name{name}, Vertices{vertices.shape}, Normals{normals.shape}, Triangles{triangles.shape}, SkinIndices {skin_indices.shape}, SkinWeights{skin_weights.shape}")
 
 
 def bytes_len(component_type: ComponentType, accessor_type: AccessorType) -> int:
@@ -278,7 +240,7 @@ def parse_joint_indices_and_weights(
     return skin_joint_indices, joint_weights
 
 
-class GLB:
+class GLB(ModelImporter):
     def __init__(self, path) -> None:
         self._path = path
         self._glb = GLTF2().load(path)
@@ -324,8 +286,6 @@ class GLB:
             triangles=Tensor.Create(np.concatenate(triangles_all, axis=0)),
             skin_indices=Tensor.Create(np.concatenate(skin_indices_all, axis=0)),
             skin_weights=Tensor.Create(np.concatenate(skin_weights_all, axis=0)),
-            tex_coord=None,
-            image=None,
         )
 
     @cached_property
@@ -386,24 +346,14 @@ class GLB:
 
                 mesh = Mesh(
                     name=name,
-                    vertices=np.array(mesh_vertices).astype(
-                        np.float32
-                    ),  # .reshape(-1,3),
-                    normals=np.array(mesh_normals).astype(
-                        np.float32
-                    ),  # .reshape(-1,3),
-                    triangles=np.array(mesh_triangles).astype(
-                        np.int64
-                    ),  # .reshape(-1),
-                    skin_indices=np.array(skin_joint_indices).astype(
-                        np.int64
-                    ),  # .reshape(-1,4),
-                    skin_weights=np.array(skin_joint_weights).astype(
-                        np.float32
-                    ),  # .reshape(-1,4)
-                    tex_coord=texcoord_i if texcoord_i != -1 else np.zeros(0),
-                    image=image,
+                    vertices=np.array(mesh_vertices).astype(np.float32),
+                    normals=np.array(mesh_normals).astype(np.float32),
+                    triangles=np.array(mesh_triangles).astype(np.int64),
+                    skin_indices=np.array(skin_joint_indices).astype(np.int64),
+                    skin_weights=np.array(skin_joint_weights).astype(np.float32),
                 )
+                mesh.TexCoord = texcoord_i if texcoord_i != -1 else np.zeros(0)
+                mesh.Image = image
 
                 meshes.append(mesh)
 

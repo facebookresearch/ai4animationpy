@@ -19,13 +19,13 @@ ffi = cffi.FFI()
 
 
 class SkinnedMesh:
-    def __init__(self, actor, glb):
+    def __init__(self, actor, model):
         self.Actor = actor
 
-        self.SkinnedMeshes = [mesh for mesh in glb.Meshes if mesh.HasSkinning]
+        self.SkinnedMeshes = [mesh for mesh in model.Meshes if mesh.HasSkinning]
 
         self.BindMatrices = np.transpose(
-            Tensor.Create(glb.Skin.Inverse_bind_matrices), axes=(0, 2, 1)
+            Tensor.Create(model.Skin.Inverse_bind_matrices), axes=(0, 2, 1)
         )
 
         self.Models = []
@@ -33,10 +33,10 @@ class SkinnedMesh:
         self.Color = RAYWHITE
 
         print(
-            f"Loading {len(self.SkinnedMeshes)} skinned meshes (skipping {len(glb.Meshes) - len(self.SkinnedMeshes)} non-skinned meshes)"
+            f"Loading {len(self.SkinnedMeshes)} skinned meshes (skipping {len(model.Meshes) - len(self.SkinnedMeshes)} non-skinned meshes)"
         )
 
-        boneCount = len(glb.JointNames)
+        boneCount = len(model.JointNames)
         self.BoneCount = boneCount
 
         MAX_BONES_SUPPORTED = 254

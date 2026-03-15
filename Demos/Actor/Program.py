@@ -21,8 +21,7 @@ class Program:
         )
         self.Actor.Entity.SetPosition(Vector3.Create(0, 0, 0))
 
-    def Standalone(self):
-        AI4Animation.Standalone.Camera.SetTarget(self.Actor.Entity)
+
 
     def Update(self):
         self.Actor.Entity.SetRotation(Rotation.Euler(0, 120 * Time.TotalTime, 0))
