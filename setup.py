@@ -41,6 +41,6 @@ setup(
         "pyscreenrec==0.6",
         "tqdm",
         "pyyaml",
-        "onnx==1.19.1",
+        "onnx==1.21.0rc1",
     ],
 )
