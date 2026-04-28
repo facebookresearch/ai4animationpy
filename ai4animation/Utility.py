@@ -117,43 +117,6 @@ def SaveModel(model, path):
     torch.save(model, path)
 
 
-def SaveONNX(
-    path,
-    model,
-    input_size,
-    input_names,
-    output_names,
-    dynamic_shapes=None,
-    dynamo=False,
-):
-    model = model.cpu() if torch.cuda.is_available() else model
-    if dynamo:
-        torch.onnx.export(
-            model,
-            input_size,
-            path,
-            opset_version=18,
-            input_names=input_names,
-            output_names=output_names,
-            dynamic_shapes=dynamic_shapes,
-            external_data=False,
-            dynamo=dynamo,
-        )
-    else:
-        torch.onnx.export(
-            model,
-            input_size,
-            path,
-            opset_version=18,
-            input_names=input_names,
-            output_names=output_names,
-            dynamic_axes=dynamic_shapes,
-            external_data=False,
-            dynamo=dynamo,
-        )
-    model = model.cuda() if torch.cuda.is_available() else model
-
-
 def GetNumWorkers():
     return os.cpu_count() // 4
 

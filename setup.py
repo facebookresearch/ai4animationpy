@@ -10,9 +10,7 @@ setup(
     description="AI4Animation Python Framework - Neural network-based character animation",
     author="Paul Starke, Sebastian Starke",
     packages=_packages,
-    package_dir={
-        "ai4animation": "ai4animation"
-    },
+    package_dir={"ai4animation": "ai4animation"},
     entry_points={
         "console_scripts": [
             "convert=ai4animation.Import.BatchConverter:main",
@@ -23,7 +21,6 @@ setup(
         "torch>=2.0.0",
         "torchvision>=0.15.0",
         "torchaudio>=2.0.0",
-        "onnxruntime-gpu>=1.18.0",
         "raylib>=4.0.0",
         "numpy>=1.21.0",
         "scipy>=1.7.0",
@@ -34,6 +31,5 @@ setup(
         "pyscreenrec==0.6",
         "tqdm",
         "pyyaml",
-        "onnx==1.19.1",
     ],
 )
