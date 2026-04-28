@@ -3,6 +3,10 @@ site_description: Python framework for AI-driven character animation using neura
 site_url: https://facebookresearch.github.io/ai4animationpy/
 repo_url: https://github.com/facebookresearch/ai4animationpy
 repo_name: facebookresearch/ai4animationpy
+copyright: >-
+  Copyright &copy; 2026 Meta Platforms, Inc &mdash;
+  <a href="https://opensource.fb.com/legal/privacy/" target="_blank" rel="noreferrer noopener">Privacy</a> &middot;
+  <a href="https://opensource.fb.com/legal/terms/" target="_blank" rel="noreferrer noopener">Terms</a>
 
 theme:
   name: material
