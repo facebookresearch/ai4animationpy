@@ -150,21 +150,23 @@ class Program:
         self.Actor = self.Actors[self.Character]
         AI4Animation.Standalone.Camera.SetTarget(self.Actor.Entity)
 
-        local_path = os.path.join(SCRIPT_DIR, "Network.pt")
-        self.Model = torch.load(local_path, weights_only=False)
-
+        self.Model = torch.load(os.path.join(SCRIPT_DIR, "Network.pt"), weights_only=False)
         self.Model.eval()
+
+        self.PostProcessor = torch.load(os.path.join(SCRIPT_DIR, "PostProcessor.pt"), weights_only=False)
+        self.PostProcessor.eval()
 
         self.SolverIterations = 1
         self.SolverAccuracy = 1e-3
 
-        self.NetworkIterations = 3
+        self.NetworkIterations = 1
 
         self.Timescale = 1.0
         self.Synchronization = 1.0
 
-        self.TrajectoryCorrection = 0.33
-        self.GuidanceCorrection = 0.33
+        self.TrajectoryCorrection = 0.1
+        self.GuidanceCorrection = 0.1
+        self.ContactPower = 2.0
 
         self.PID = PID(kp=2.0, ki=0.03, kd=0.0)
         self.PIDSpeedHistory = np.zeros((3, self.PIDHistoryLength), dtype=np.float32)
@@ -398,7 +400,7 @@ class Program:
             )
 
     def Predict(self):
-        inputs = FeedTensor("X", self.Model.InputDim)
+        inputs = FeedTensor("X", self.Model.input_dim())
 
         root = self.Actor.Root
 
@@ -422,16 +424,9 @@ class Program:
 
         inputs.Feed(self.GuidanceControl.Positions)
 
-        noise = 0.0
-        outputs, _, _, _ = self.Model(
+        outputs = self.Model(
             inputs.GetTensor().reshape(1, -1),
-            noise=(
-                0.5
-                - noise / 2.0
-                + noise * Tensor.ToDevice(torch.rand(1, self.Model.LatentDim))
-            ),
-            iterations=self.NetworkIterations,
-            seed=Tensor.ToDevice(torch.zeros(1, self.Model.LatentDim)),
+            iterations=self.NetworkIterations
         )
         outputs = outputs.reshape(SEQUENCE_LENGTH, -1)
         outputs = ReadTensor("Y", Tensor.ToNumPy(outputs))
@@ -464,9 +459,6 @@ class Program:
             futureRootTransforms.reshape(SEQUENCE_LENGTH, 1, 4, 4),
         )
 
-        raw_contacts = outputs.Read(4)
-        futureContacts = Utility.SmoothStep(raw_contacts, CONTACT_THRESHOLD, CONTACT_POWER)
-
         futureGuidances = outputs.ReadVector3(self.Actor.GetBoneCount())
 
         self.Previous = self.Sequence
@@ -484,8 +476,45 @@ class Program:
             futureMotionTransforms,
             futureMotionVelocities,
         )
-        self.Sequence.Contacts = futureContacts
         self.Sequence.Guidances = futureGuidances
+
+        # Predict Contacts
+        inputs = FeedTensor("X", self.PostProcessor.input_dim())
+
+        currentTransforms = self.Actor.GetTransforms(self.ContactIndices)
+        currentVelocities = self.Actor.GetVelocities(self.ContactIndices)
+        targetTransforms = self.Sequence.Motion.GetTransforms(self.ContactBones)[
+            1:, :, :
+        ]
+        targetVelocities = self.Sequence.Motion.GetVelocities(self.ContactBones)[
+            1:, :, :
+        ]
+        delta_distances = Vector3.Distance(
+            Transform.GetPosition(currentTransforms),
+            Transform.GetPosition(targetTransforms),
+        )
+        delta_angles = Rotation.Angle(
+            Transform.GetRotation(currentTransforms),
+            Transform.GetRotation(targetTransforms),
+        )
+        delta_velocities = Vector3.Distance(currentVelocities, targetVelocities)
+
+        inputs.Feed(Transform.GetPosition(transforms))
+        inputs.Feed(Transform.GetAxisZ(transforms))
+        inputs.Feed(Transform.GetAxisY(transforms))
+        inputs.Feed(velocities)
+        inputs.Feed(delta_distances)
+        inputs.Feed(delta_angles)
+        inputs.Feed(delta_velocities)
+
+        contacts = Tensor.ToNumPy(
+            self.PostProcessor(inputs.GetTensor()).reshape(
+                SEQUENCE_LENGTH, len(self.ContactBones)
+            )
+        )
+        self.Sequence.Contacts = Tensor.Pow(
+            Tensor.Clamp(contacts, 0, 1), self.ContactPower
+        )
 
     def Animate(self):
         dt = Time.DeltaTime

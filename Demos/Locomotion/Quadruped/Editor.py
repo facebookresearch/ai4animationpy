@@ -13,6 +13,7 @@ from ai4animation import (
     MotionModule,
     RootModule,
     Vector3,
+    AssetManager
 )
 
 SCRIPT_DIR = Path(__file__).parent
