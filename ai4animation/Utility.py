@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Shared helper functions for file I/O, serialization, color manipulation, and dynamic module loading."""
+
 import importlib.util
 import os
 import pathlib
@@ -9,8 +11,6 @@ import sys
 
 import numpy as np
 import torch
-from ai4animation.AI.Optimizers.AdamWR.AdamW import AdamW
-from ai4animation.AI.Optimizers.AdamWR.CyclicScheduler import CyclicScheduler
 
 
 def ToBytes(value):
@@ -119,41 +119,6 @@ def SaveModel(model, path):
 
 def GetNumWorkers():
     return os.cpu_count() // 4
-
-
-class CosineAnnealingOptimizer:
-    def __init__(
-        self,
-        params,
-        batch_size,
-        sample_count,
-        lr=1e-4,
-        decay=1e-4,
-        restart_period=10,
-        t_mult=2,
-    ):
-        self.Optimizer = AdamW(params, lr=lr, weight_decay=decay)
-        self.Scheduler = CyclicScheduler(
-            optimizer=self.Optimizer,
-            batch_size=batch_size,
-            epoch_size=sample_count,
-            restart_period=restart_period,
-            t_mult=t_mult,
-            policy="cosine",
-            verbose=True,
-        )
-        self.Step = 0
-        self.Total = sample_count
-
-    def Update(self, count, loss):
-        self.Optimizer.zero_grad()
-        loss.backward()
-        self.Optimizer.step()
-        self.Scheduler.batch_step()
-        self.Step += count
-        if self.Step == self.Total:
-            self.Scheduler.step()
-            self.Step = 0
 
 
 # @staticmethod

@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Tracking module for computing tracked bone positions, rotations, and velocities."""
+
 from ai4animation import Utility
 from ai4animation.AI4Animation import AI4Animation
 from ai4animation.Animation.Module import Module
@@ -136,9 +138,11 @@ class TrackingModule(Module):
                 editor.Timestamp,
                 editor.Mirror,
                 editor.TimeSeries,
-                TimeSeries(-window / 2, window / 2, editor.TimeSeries.SampleCount)
-                if self.Button_Smooth.Active
-                else None,
+                (
+                    TimeSeries(-window / 2, window / 2, editor.TimeSeries.SampleCount)
+                    if self.Button_Smooth.Active
+                    else None
+                ),
             ).Draw()
 
     class Series(TimeSeries):
@@ -217,9 +221,11 @@ class TrackingModule(Module):
                         else positionColor
                     )
                     velocityColor = Utility.Opacity(
-                        AI4Animation.Color.GREEN
-                        if velocityColor is None
-                        else velocityColor,
+                        (
+                            AI4Animation.Color.GREEN
+                            if velocityColor is None
+                            else velocityColor
+                        ),
                         0.5,
                     )
                     if drawConnections:

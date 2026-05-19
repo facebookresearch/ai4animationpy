@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Scene graph managing entities, camera, and transform hierarchy."""
+
 from ai4animation import AI4Animation, Entity
 from ai4animation.Math import Tensor, Transform, Vector3
 

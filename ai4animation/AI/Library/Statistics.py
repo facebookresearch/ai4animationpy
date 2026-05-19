@@ -2,9 +2,6 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from ai4animation.AI import Manifolds
-from einops import rearrange
 from torch.nn.parameter import Parameter
 
 
@@ -21,7 +18,7 @@ calculate-a-running-standard-deviation>
     Adapted for usage with PyTorch by converting the original implementation from NumPy to PyTorch.
     """
 
-    def __init__(self, dim, n=0.0, m=None, s=None):
+    def __init__(self, dim, n=0.0, m=None, s=None, id=None):
         super(RunningStatistics, self).__init__()
 
         self.Active = False  # Flag to check if the statistics have been updated
@@ -29,6 +26,7 @@ calculate-a-running-standard-deviation>
         self.n = n
         self.m = m
         self.s = s
+        self.ID = id
 
         self.Dim = dim
 
@@ -58,12 +56,29 @@ calculate-a-running-standard-deviation>
     def Normalize(self, tensor):
         if not self.Active:
             return tensor
+        if tensor.shape[-1] != self.Dim:
+            # print(self.ID)
+            print(
+                "Dimension mismatch in Normalize. Given:",
+                tensor.shape[-1],
+                " Expected:",
+                self.Dim,
+            )
+            return tensor
         mean = self.Norm[0]
         std = self.Norm[1]
         return (tensor - mean) / std
 
     def Denormalize(self, tensor):
         if not self.Active:
+            return tensor
+        if tensor.shape[-1] != self.Dim:
+            print(
+                "Dimension mismatch in Denormalize. Given:",
+                tensor.shape[-1],
+                " Expected:",
+                self.Dim,
+            )
             return tensor
         mean = self.Norm[0]
         std = self.Norm[1]

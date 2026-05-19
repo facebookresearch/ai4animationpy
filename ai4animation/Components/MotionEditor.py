@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Editor component for interactive motion playback, timeline control, and module visualization."""
+
 from ai4animation import Time
 from ai4animation.AI4Animation import AI4Animation
 from ai4animation.Animation.Module import Module
@@ -36,36 +38,47 @@ class MotionEditor(Component):
             print("Dataset has no files")
 
     def Update(self):
-        # return
+        # if AI4Animation.Standalone is None:
+        #     if not self.IsPlaying():
+        #         return
+        # else:
+        #     if (
+        #         not self.IsPlaying()
+        #         and not self.Slider_Assets.Modified
+        #         and not self.Slider_Timeline.Modified
+        #         and not self.Slider_Scale.Modified
+        #         and not self.Button_Mirror.IsPressed()
+        #     ):
+        #         return
         self.LoadFrame(self.Timestamp)
 
     def IsSetup(self):
         return self.Motion is not None
 
+    def IsPlaying(self):
+        return self.Button_Play_Motion.Active
+
     def LoadFrame(self, timestamp):
         if self.IsSetup():
             self.Timestamp = timestamp
             if self.Actor:
-                self.WriteActor(self.Actor, self.Timestamp, self.Mirror)
+                self.Actor.SetTransforms(
+                    self.Motion.GetBoneTransformations(
+                        timestamp, self.Actor.GetBoneNames(), mirrored=self.Mirror
+                    )
+                )
+                self.Actor.SetVelocities(
+                    self.Motion.GetBoneVelocities(
+                        timestamp, self.Actor.GetBoneNames(), mirrored=self.Mirror
+                    )
+                )
+                self.Actor.Entity.SetScale(self.Motion.Scale)
 
             for module in self.Motion.Modules:
                 module.Callback(self)
 
             if self.Actor:
                 self.Actor.SyncToScene()
-
-    def WriteActor(self, actor, timestamp, mirrored):
-        actor.SetTransforms(
-            self.Motion.GetBoneTransformations(
-                timestamp, actor.GetBoneNames(), mirrored=mirrored
-            )
-        )
-        actor.SetVelocities(
-            self.Motion.GetBoneVelocities(
-                timestamp, actor.GetBoneNames(), mirrored=mirrored
-            )
-        )
-        actor.Entity.SetScale(self.Motion.Scale)
 
     def LoadPreviousMotion(self):
         index = self.Dataset.GetMotionIndex(self.Motion)
@@ -237,6 +250,9 @@ class MotionEditor(Component):
 
         for module in self.Motion.Modules:
             module.GUI(self)
+
+        # if not self.IsPlaying():
+        #     self.Actor.DrawHandle()
 
     def Draw(self):
         for module in self.Motion.Modules:

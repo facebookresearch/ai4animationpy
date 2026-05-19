@@ -31,9 +31,9 @@ class MirrorModule(Module):
                     Rotation.Euler(v)
                 )
 
-        self.NeedsCorrection: bool = not Tensor.All(
-            self.Correction == Rotation.Euler(0, 0, 0)
-        )
+        # self.NeedsCorrection: bool = not Tensor.All(
+        #     self.Correction == Rotation.Euler(0, 0, 0)
+        # )
 
     def Initialize(self):
         pass
@@ -45,11 +45,11 @@ class MirrorModule(Module):
         bone_indices = [self.Symmetry[x] for x in bone_indices]
         transforms = self.Motion.Frames[frame_indices][:, bone_indices]
         transforms = Transform.GetMirror(transforms, self.MirrorAxis)
-        if self.NeedsCorrection:
-            local_update = Transform.R(
-                self.Correction[bone_indices],
-            ).reshape(1, len(bone_indices), 4, 4)
-            transforms = Transform.Multiply(transforms, local_update)
+        # if self.NeedsCorrection:
+        local_update = Transform.R(
+            self.Correction[bone_indices],
+        ).reshape(1, len(bone_indices), 4, 4)
+        transforms = Transform.Multiply(transforms, local_update)
         return transforms
 
     def GUI(self, editor):
@@ -80,56 +80,46 @@ class MirrorModule(Module):
             # )
             # self.Actor.SyncToScene()
 
-    def DetectSymmetry(self, joint_names):
-        def TryAssign(value: str, bone: int):
-            if value in name_to_idx:
-                symmetry[bone] = name_to_idx[value]
-                return True
-            else:
-                return False
+    # Substring pairs for detecting left/right symmetry in bone names.
+    # Each (left, right) entry is tried as a substring replacement.
+    _SYMMETRY_SUBSTRINGS = [
+        ("_l_", "_r_"),
+        ("_left_", "_right_"),
+        ("Left", "Right"),
+    ]
 
+    # Prefix pairs for detecting left/right symmetry via bone name prefix.
+    # Each (left_prefix, right_prefix) entry is tried against the start of the name.
+    _SYMMETRY_PREFIXES = [
+        ("l_", "r_"),
+    ]
+
+    def DetectSymmetry(self, joint_names):
         name_to_idx = {name: i for i, name in enumerate(joint_names)}
         symmetry = list(range(len(joint_names)))
         for i, boneName in enumerate(joint_names):
             if boneName is None:
                 continue
-            if "_l_" in boneName:
-                if TryAssign(boneName.replace("_l_", "_r_"), i):
-                    continue
-
-            if "_r_" in boneName:
-                if TryAssign(boneName.replace("_r_", "_l_"), i):
-                    continue
-
-            if "_left_" in boneName:
-                if TryAssign(boneName.replace("_left_", "_right_"), i):
-                    continue
-
-            if "_right_" in boneName:
-                if TryAssign(boneName.replace("_right_", "_left_"), i):
-                    continue
-
-            if "Left" in boneName:
-                if TryAssign(boneName.replace("Left", "Right"), i):
-                    continue
-
-            if "Right" in boneName:
-                if TryAssign(boneName.replace("Right", "Left"), i):
-                    continue
-
-            if boneName[0] == "l" and boneName[1] == "_":
-                symmName = "r_" + boneName[2:]
-                if TryAssign(symmName, i):
-                    continue
-
-            if boneName[0] == "r" and boneName[1] == "_":
-                symmName = "l_" + boneName[2:]
-                if TryAssign(symmName, i):
-                    continue
-
+            if self._TryAssignSymmetricName(boneName, i, name_to_idx, symmetry):
+                continue
             symmetry[i] = i
-
-        # for i, boneName in enumerate(joint_names):
-        #    print(boneName, name_to_idx[boneName], joint_names[symmetry[i]])
-
         return symmetry
+
+    def _TryAssignSymmetricName(self, boneName, bone_idx, name_to_idx, symmetry):
+        for left, right in self._SYMMETRY_SUBSTRINGS:
+            for src, dst in [(left, right), (right, left)]:
+                if src in boneName:
+                    mirror = boneName.replace(src, dst)
+                    if mirror in name_to_idx:
+                        symmetry[bone_idx] = name_to_idx[mirror]
+                        return True
+
+        for left, right in self._SYMMETRY_PREFIXES:
+            for src, dst in [(left, right), (right, left)]:
+                if boneName.startswith(src):
+                    mirror = dst + boneName[len(src) :]
+                    if mirror in name_to_idx:
+                        symmetry[bone_idx] = name_to_idx[mirror]
+                        return True
+
+        return False

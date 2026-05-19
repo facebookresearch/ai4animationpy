@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""3D vector creation, arithmetic, and geometric operations."""
+
 from enum import Enum
 
 from ai4animation.Math import Tensor, Transform
@@ -19,8 +21,8 @@ def Create(*values):
         return Tensor.Transpose(Tensor.Create(values))
 
 
-def Zero(shape=None):
-    return Tensor.Shapify(Tensor.Zeros(3), shape)
+def Zero(shape=None, backend=None):
+    return Tensor.Shapify(Tensor.Zeros(3, backend=backend), shape)
 
 
 def One(shape=None):

@@ -1,26 +1,15 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from ai4animation.AI import Manifolds
 from ai4animation.AI.Library import Defaults
-from ai4animation.AI.Library.Layers import (
-    FiLMLayer,
-    FiLMLinearLayer,
-    LinearLayer,
-    VariationalLayer,
-)
-from einops import rearrange
-from torch.nn.parameter import Parameter
+from ai4animation.AI.Library.Layers import FiLMLinearLayer, LinearLayer
 
 
 class LinearBlock(torch.nn.Module):
     def __init__(
         self,
         input_size,
-        hidden_size,
         output_size,
+        hidden_size,
         dropout=Defaults.Dropout,
         activation=Defaults.Activation,
     ):
@@ -29,6 +18,12 @@ class LinearBlock(torch.nn.Module):
         self.L1 = LinearLayer(input_size, hidden_size, dropout, activation)
         self.L2 = LinearLayer(hidden_size, hidden_size, dropout, activation)
         self.L3 = LinearLayer(hidden_size, output_size, dropout, None)
+
+    def input_dim(self):
+        return self.L1.input_dim()
+
+    def output_dim(self):
+        return self.L3.output_dim()
 
     def forward(self, z):
         z = self.L1(z)
@@ -41,8 +36,8 @@ class FiLMLinearBlock(torch.nn.Module):
     def __init__(
         self,
         input_size,
-        hidden_size,
         output_size,
+        hidden_size,
         film_size,
         dropout=Defaults.Dropout,
         activation=Defaults.Activation,
@@ -57,6 +52,12 @@ class FiLMLinearBlock(torch.nn.Module):
         )
         self.L3 = FiLMLinearLayer(hidden_size, output_size, film_size, dropout, None)
 
+    def input_dim(self):
+        return self.L1.input_dim()
+
+    def output_dim(self):
+        return self.L3.output_dim()
+
     def forward(self, z, film):
         z = self.L1(z, film)
         z = self.L2(z, film)
@@ -64,13 +65,41 @@ class FiLMLinearBlock(torch.nn.Module):
         return z
 
 
+class SpaceTimeBlock(torch.nn.Module):
+    def __init__(
+        self,
+        input_dim,
+        output_dim,
+        hidden_dim,
+        source_length,
+        target_length,
+        dropout,
+    ):
+        super(SpaceTimeBlock, self).__init__()
+        self.Space = LinearBlock(input_dim, output_dim, hidden_dim, dropout)
+        self.Time = LinearBlock(source_length, target_length, hidden_dim, dropout)
+
+    def input_dim(self):
+        return self.Space.input_dim()
+
+    def output_dim(self):
+        return self.Space.output_dim()
+
+    def forward(self, z):
+        z = self.Space(z)
+        z = z.swapaxes(-1, -2)
+        z = self.Time(z)
+        z = z.swapaxes(-1, -2)
+        return z
+
+
 class RegularizedFiLMLinearBlock(torch.nn.Module):
     def __init__(
         self,
         input_size,
-        hidden_size,
         output_size,
         regularization_size,
+        hidden_size,
         film_size,
         dropout=Defaults.Dropout,
         activation=Defaults.Activation,
@@ -87,6 +116,12 @@ class RegularizedFiLMLinearBlock(torch.nn.Module):
         self.R = FiLMLinearLayer(
             hidden_size, regularization_size, film_size, dropout, None
         )
+
+    def output_dim(self):
+        return self.L3.output_dim()
+
+    def regularization_dim(self):
+        return self.R.output_dim()
 
     def forward(self, z, film):
         z = self.L1(z, film)

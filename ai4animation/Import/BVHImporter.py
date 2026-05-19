@@ -68,137 +68,15 @@ class BVH:
         if not os.path.isfile(path):
             raise FileNotFoundError(f"BVH file not found: {path}")
 
-        f = open(path, "r")
+        with open(path, "r") as f:
+            lines = f.readlines()
 
-        i = 0
-        active = -1
-
-        names = []
-        offsets = np.array([], dtype=np.float32).reshape((0, 3))
-        parents = np.array([], dtype=int)
-        channel_counts = []
-
-        channels = None
-        order = None
-        framerate = None
-
-        for line in f:
-            if "HIERARCHY" in line:
-                continue
-            if "MOTION" in line:
-                continue
-
-            rmatch = re.match(r"\s*ROOT\s+(.+?)\s*$", line)
-            if rmatch:
-                names.append(rmatch.group(1))
-                offsets = np.append(offsets, np.array([[0, 0, 0]], dtype=np.float32), axis=0)
-                parents = np.append(parents, active)
-                channel_counts.append(0)
-                active = len(parents) - 1
-                continue
-
-            if "{" in line:
-                continue
-
-            if "}" in line:
-                if active != -1:
-                    active = parents[active]
-                continue
-
-            offmatch = re.match(
-                r"\s*OFFSET\s+([\-\d\.eE\+]+)\s+([\-\d\.eE\+]+)\s+([\-\d\.eE\+]+)", line
-            )
-            if offmatch:
-                offsets[active] = np.array([list(map(float, offmatch.groups()))], dtype=np.float32)
-                continue
-
-            chanmatch = re.match(r"\s*CHANNELS\s+(\d+)", line)
-            if chanmatch:
-                channels = int(chanmatch.group(1))
-                channel_counts[active] = channels
-                if order is None:
-                    channelis = 0 if channels == 3 else 3
-                    channelie = 3 if channels == 3 else 6
-                    parts = line.split()[2 + channelis : 2 + channelie]
-                    if all(p in channelmap for p in parts):
-                        order = "".join([channelmap[p] for p in parts])
-                continue
-
-            jmatch = re.match(r"\s*JOINT\s+(.+?)\s*$", line)
-            if jmatch:
-                names.append(jmatch.group(1))
-                offsets = np.append(offsets, np.array([[0, 0, 0]], dtype=np.float32), axis=0)
-                parents = np.append(parents, active)
-                channel_counts.append(0)
-                active = len(parents) - 1
-                continue
-
-            if "End Site" in line:
-                parent_name = names[active] if active != -1 else "End"
-                site_name = f"{parent_name}Site"
-                suffix = 1
-                while site_name in names:
-                    suffix += 1
-                    site_name = f"{parent_name}Site{suffix}"
-
-                names.append(site_name)
-                offsets = np.append(offsets, np.array([[0, 0, 0]], dtype=np.float32), axis=0)
-                parents = np.append(parents, active)
-                channel_counts.append(0)
-                active = len(parents) - 1
-                continue
-
-            fmatch = re.match(r"\s*Frames:\s+(\d+)", line)
-            if fmatch:
-                fnum = int(fmatch.group(1))
-                positions = offsets[np.newaxis].repeat(fnum, axis=0)
-                rotations = np.zeros((fnum, len(names), 3), dtype=np.float32)
-                continue
-
-            fmatch = re.match(r"\s*Frame Time:\s+([\d\.eE\+\-]+)", line)
-            if fmatch:
-                framerate = float(fmatch.group(1))
-                continue
-
-            dmatch = line.strip().split()
-            if dmatch:
-                data_block = np.array(list(map(float, dmatch)), dtype=np.float32)
-                fi = i
-                cursor = 0
-
-                for joint_idx, num_channels in enumerate(channel_counts):
-                    if num_channels == 0:
-                        continue
-
-                    joint_block = data_block[cursor : cursor + num_channels]
-                    if joint_block.size != num_channels:
-                        raise ValueError(
-                            f"Invalid BVH frame data in {path}: expected {num_channels} values for joint {names[joint_idx]}, got {joint_block.size}."
-                        )
-
-                    if num_channels == 3:
-                        rotations[fi, joint_idx] = joint_block
-                    elif num_channels == 6:
-                        positions[fi, joint_idx] = joint_block[0:3]
-                        rotations[fi, joint_idx] = joint_block[3:6]
-                    elif num_channels == 9:
-                        positions[fi, joint_idx] += joint_block[0:3] * joint_block[6:9]
-                        rotations[fi, joint_idx] = joint_block[3:6]
-                    else:
-                        raise ValueError(
-                            f"Unsupported BVH channel count {num_channels} for joint {names[joint_idx]}."
-                        )
-
-                    cursor += num_channels
-
-                if cursor != len(data_block):
-                    raise ValueError(
-                        f"Invalid BVH frame data in {path}: consumed {cursor} values but frame contains {len(data_block)}."
-                    )
-
-                i += 1
-
-        f.close()
+        names, offsets, parents, channel_counts, order = self._parse_hierarchy(
+            lines, path
+        )
+        positions, rotations, framerate = self._parse_motion(
+            lines, names, offsets, channel_counts, path
+        )
 
         if order is None:
             raise ValueError(f"Could not detect rotation order from BVH file: {path}")
@@ -216,6 +94,156 @@ class BVH:
         self._joint_corrections = _resolve_joint_corrections(
             self._names, joint_corrections
         )
+
+    @staticmethod
+    def _parse_hierarchy(lines, path):
+        active = -1
+        names = []
+        offsets = np.array([], dtype=np.float32).reshape((0, 3))
+        parents = np.array([], dtype=int)
+        channel_counts = []
+        order = None
+
+        for line in lines:
+            if "HIERARCHY" in line:
+                continue
+            if "MOTION" in line:
+                break
+
+            rmatch = re.match(r"\s*ROOT\s+(.+?)\s*$", line)
+            if rmatch:
+                names.append(rmatch.group(1))
+                offsets = np.append(
+                    offsets, np.array([[0, 0, 0]], dtype=np.float32), axis=0
+                )
+                parents = np.append(parents, active)
+                channel_counts.append(0)
+                active = len(parents) - 1
+                continue
+
+            if "{" in line:
+                continue
+
+            if "}" in line:
+                if active != -1:
+                    active = parents[active]
+                continue
+
+            offmatch = re.match(
+                r"\s*OFFSET\s+([\-\d\.eE\+]+)\s+([\-\d\.eE\+]+)\s+([\-\d\.eE\+]+)", line
+            )
+            if offmatch:
+                offsets[active] = np.array(
+                    [list(map(float, offmatch.groups()))], dtype=np.float32
+                )
+                continue
+
+            chanmatch = re.match(r"\s*CHANNELS\s+(\d+)", line)
+            if chanmatch:
+                channels = int(chanmatch.group(1))
+                channel_counts[active] = channels
+                if order is None:
+                    channelis = 0 if channels == 3 else 3
+                    channelie = 3 if channels == 3 else 6
+                    parts = line.split()[2 + channelis : 2 + channelie]
+                    if all(p in channelmap for p in parts):
+                        order = "".join([channelmap[p] for p in parts])
+                continue
+
+            jmatch = re.match(r"\s*JOINT\s+(.+?)\s*$", line)
+            if jmatch:
+                names.append(jmatch.group(1))
+                offsets = np.append(
+                    offsets, np.array([[0, 0, 0]], dtype=np.float32), axis=0
+                )
+                parents = np.append(parents, active)
+                channel_counts.append(0)
+                active = len(parents) - 1
+                continue
+
+            if "End Site" in line:
+                parent_name = names[active] if active != -1 else "End"
+                site_name = f"{parent_name}Site"
+                suffix = 1
+                while site_name in names:
+                    suffix += 1
+                    site_name = f"{parent_name}Site{suffix}"
+
+                names.append(site_name)
+                offsets = np.append(
+                    offsets, np.array([[0, 0, 0]], dtype=np.float32), axis=0
+                )
+                parents = np.append(parents, active)
+                channel_counts.append(0)
+                active = len(parents) - 1
+                continue
+
+        return names, offsets, parents, channel_counts, order
+
+    @staticmethod
+    def _parse_motion(lines, names, offsets, channel_counts, path):
+        positions = None
+        rotations = None
+        framerate = None
+        i = 0
+
+        for line in lines:
+            fmatch = re.match(r"\s*Frames:\s+(\d+)", line)
+            if fmatch:
+                fnum = int(fmatch.group(1))
+                positions = offsets[np.newaxis].repeat(fnum, axis=0)
+                rotations = np.zeros((fnum, len(names), 3), dtype=np.float32)
+                continue
+
+            fmatch = re.match(r"\s*Frame Time:\s+([\d\.eE\+\-]+)", line)
+            if fmatch:
+                framerate = float(fmatch.group(1))
+                continue
+
+            if positions is None:
+                continue
+
+            dmatch = line.strip().split()
+            if not dmatch:
+                continue
+
+            data_block = np.array(list(map(float, dmatch)), dtype=np.float32)
+            fi = i
+            cursor = 0
+
+            for joint_idx, num_channels in enumerate(channel_counts):
+                if num_channels == 0:
+                    continue
+
+                joint_block = data_block[cursor : cursor + num_channels]
+                if joint_block.size != num_channels:
+                    raise ValueError(
+                        f"Invalid BVH frame data in {path}: expected {num_channels} values for joint {names[joint_idx]}, got {joint_block.size}."
+                    )
+
+                if num_channels == 3:
+                    rotations[fi, joint_idx] = joint_block
+                elif num_channels == 6:
+                    positions[fi, joint_idx] = joint_block[0:3]
+                    rotations[fi, joint_idx] = joint_block[3:6]
+                elif num_channels == 9:
+                    positions[fi, joint_idx] += joint_block[0:3] * joint_block[6:9]
+                    rotations[fi, joint_idx] = joint_block[3:6]
+                else:
+                    raise ValueError(
+                        f"Unsupported BVH channel count {num_channels} for joint {names[joint_idx]}."
+                    )
+
+                cursor += num_channels
+
+            if cursor != len(data_block):
+                raise ValueError(
+                    f"Invalid BVH frame data in {path}: consumed {cursor} values but frame contains {len(data_block)}."
+                )
+
+            i += 1
+
+        return positions, rotations, framerate
 
     @property
     def Filename(self) -> str:

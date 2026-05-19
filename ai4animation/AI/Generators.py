@@ -1,6 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Synthetic data generators for testing generative models."""
+
 import torch
-from sklearn.datasets import make_moons
 
 
 def SquareFunctions(samples, resolution, min=0.0, max=1.0):

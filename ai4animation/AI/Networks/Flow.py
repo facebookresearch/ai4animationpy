@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Flow matching generative model using midpoint ODE integration."""
+
 import torch
 import torch.nn as nn
 from ai4animation.AI import Modules, Stats
@@ -24,7 +26,7 @@ class Model(nn.Module):
         output = self.Stats.Normalize(output)
 
         noise = torch.randn_like(output)
-        t = torch.rand(output.shape[0], 1).to(output.device)
+        t = torch.rand(output.shape[0], 1, device=output.device)
         x_t = (1 - t) * noise + t * output
 
         z = self.run(x_t, t)

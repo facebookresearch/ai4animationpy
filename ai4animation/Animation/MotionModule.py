@@ -1,8 +1,11 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-from ai4animation import Utility
+"""Module for extracting per-bone motion features (positions, rotations, velocities)."""
+
+from ai4animation import AssetManager, Utility
 from ai4animation.AI4Animation import AI4Animation
 from ai4animation.Animation.Module import Module
 from ai4animation.Animation.Motion import Motion
+from ai4animation.Animation.RootModule import RootModule
 from ai4animation.Animation.TimeSeries import TimeSeries
 from ai4animation.Math import Tensor, Transform, Vector3
 
@@ -24,76 +27,126 @@ class MotionModule(Module):
         names: list[str],
         timeseries: TimeSeries,
         smoothing: TimeSeries = None,
+        power=1.0,
     ):
         timestamps = timeseries.SimulateTimestamps(timestamp)
-        instance = self.Series(
-            timeseries,
-            names,
-            self.GetTransforms(timestamps, mirrored, names, smoothing),
-            self.GetVelocities(timestamps, mirrored, names, smoothing),
-        )
+        transforms = self.GetTransforms(timestamps, mirrored, names, smoothing, power)
+        velocities = self.GetVelocities(timestamps, mirrored, names, smoothing, power)
+        instance = self.Series(timeseries, names, transforms, velocities)
         return instance
 
-    def GetTransforms(self, timestamps, mirrored, names, smoothing: TimeSeries = None):
+    def GetTransforms(
+        self,
+        timestamps,
+        mirrored,
+        names,
+        smoothing: TimeSeries = None,
+        power=1.0,
+    ):
         if smoothing is not None and smoothing.Window > 0.0:
-            timestamps = Tensor.Unsqueeze(timestamps, -1) + smoothing.Timestamps
-            axis = len(timestamps.shape) - 1
-            transforms = self.GetTransforms(timestamps, mirrored, names)
-            transforms = Tensor.Squeeze(
-                Tensor.Gaussian(transforms, power=1.0, axis=axis), axis
-            )  # This might be buggy, need to renormalize matrix
-            return transforms
+            return Transform.Normalize(
+                self.SmoothCurves(
+                    self.Motion.GetBoneTransformations,
+                    timestamps,
+                    mirrored,
+                    names,
+                    smoothing,
+                    power,
+                )
+            )
         else:
             return self.Motion.GetBoneTransformations(timestamps, names, mirrored)
 
-    def GetPositions(self, timestamps, mirrored, names, smoothing: TimeSeries = None):
+    def GetPositions(
+        self,
+        timestamps,
+        mirrored,
+        names,
+        smoothing: TimeSeries = None,
+        power=1.0,
+    ):
         if smoothing is not None and smoothing.Window > 0.0:
-            timestamps = Tensor.Unsqueeze(timestamps, -1) + smoothing.Timestamps
-            axis = len(timestamps.shape) - 1
-            transforms = self.GetPositions(timestamps, mirrored, names)
-            transforms = Tensor.Squeeze(
-                Tensor.Gaussian(transforms, power=1.0, axis=axis), axis
+            return self.SmoothCurves(
+                self.Motion.GetBonePositions,
+                timestamps,
+                mirrored,
+                names,
+                smoothing,
+                power,
             )
-            return transforms
         else:
             return self.Motion.GetBonePositions(timestamps, names, mirrored)
 
-    def GetVelocities(self, timestamps, mirrored, names, smoothing: TimeSeries = None):
+    def GetVelocities(
+        self,
+        timestamps,
+        mirrored,
+        names,
+        smoothing: TimeSeries = None,
+        power=1.0,
+    ):
         if smoothing is not None and smoothing.Window > 0.0:
-            timestamps = Tensor.Unsqueeze(timestamps, -1) + smoothing.Timestamps
-            axis = len(timestamps.shape) - 1
-            velocities = self.GetVelocities(timestamps, mirrored, names)
-            velocities = Tensor.Squeeze(
-                Tensor.Gaussian(velocities, power=1.0, axis=axis), axis
+            return self.SmoothCurves(
+                self.Motion.GetBoneVelocities,
+                timestamps,
+                mirrored,
+                names,
+                smoothing,
+                power,
             )
-            return velocities
         else:
             return self.Motion.GetBoneVelocities(timestamps, names, mirrored)
 
+    def SmoothCurves(self, fn, timestamps, mirrored, names, smoothing, power):
+        axis = len(timestamps.shape)
+        timestamps = Tensor.Unsqueeze(timestamps, -1)
+        timestamps = timestamps + smoothing.Timestamps
+        values = fn(timestamps, names, mirrored)
+        values = Tensor.Gaussian(
+            values,
+            power=power,
+            axis=axis,
+            keepDim=False,
+        )
+        return values
+
     def Standalone(self):
         self.Button_Smooth = AI4Animation.GUI.Button(
-            "Smoothed", 0.45, 0.25, 0.1, 0.05, False, True
+            "Smooth", 0.4, 0.2, 0.2, 0.05, False, True
         )
-        self.Slider_Smooth = AI4Animation.GUI.Slider(
-            0.45, 0.3, 0.1, 0.05, 1.0, 0.0, 2.0
+        self.Slider_Window = AI4Animation.GUI.Slider(
+            0.4, 0.25, 0.2, 0.05, 1.0, 0.0, 2.0, label="Window"
+        )
+        self.Slider_Power = AI4Animation.GUI.Slider(
+            0.4, 0.3, 0.2, 0.05, 1.0, 0.0, 1.0, label="Power"
         )
 
     def GUI(self, editor):
         if Module.Visualize[MotionModule]:
             self.Button_Smooth.GUI()
-            self.Slider_Smooth.GUI()
+            self.Slider_Window.GUI()
+            self.Slider_Power.GUI()
 
     def Draw(self, editor):
         if Module.Visualize[MotionModule]:
-            window = self.Slider_Smooth.GetValue()
+            window = self.Slider_Window.GetValue()
+            power = self.Slider_Power.GetValue()
+            smoothing = (
+                TimeSeries(
+                    -window / 2,
+                    window / 2,
+                    editor.TimeSeries.SampleCount,
+                )
+                if self.Button_Smooth.Active
+                else None
+            )
             self.ComputeSeries(
                 editor.Timestamp,
                 editor.Mirror,
                 editor.Actor.GetBoneNames(),
                 editor.TimeSeries,
-                TimeSeries(-window / 2, window / 2, editor.TimeSeries.SampleCount)
-                if self.Button_Smooth.Active
-                else None,
+                smoothing,
+                power,
             ).Draw()
 
     class Series(TimeSeries):
@@ -145,6 +198,17 @@ class MotionModule(Module):
                 bone_indices = [self.NameToIndexMap[name] for name in bone_names]
                 return self.Velocities[start:end, bone_indices, :]
 
+        def ClampDistance(self, pivot, distance):
+            for index in range(self.SampleCount):
+                for bone in range(self.TrajectoryCount):
+                    offset = Transform.GetPosition(self.Transforms[index, bone]) - pivot
+                    horizontal = Vector3.Create(offset[0], 0, offset[2])
+                    if Vector3.Length(horizontal) > distance:
+                        horizontal = distance * Vector3.Normalize(horizontal)
+                        self.Transforms[index, bone, :3, 3] = pivot + Vector3.Create(
+                            horizontal[0], offset[1], horizontal[2]
+                        )
+
         def Draw(
             self,
             start=None,
@@ -170,9 +234,11 @@ class MotionModule(Module):
                         else positionColor
                     )
                     vColor = Utility.Opacity(
-                        AI4Animation.Color.GREEN
-                        if velocityColor is None
-                        else velocityColor,
+                        (
+                            AI4Animation.Color.GREEN
+                            if velocityColor is None
+                            else velocityColor
+                        ),
                         0.5,
                     )
                     if drawConnections:

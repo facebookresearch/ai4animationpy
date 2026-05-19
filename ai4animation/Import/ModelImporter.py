@@ -22,7 +22,9 @@ class Skin:
             inverse_mats = np.linalg.inv(bind_pose_matrices)
             self.Inverse_bind_matrices = np.transpose(inverse_mats, axes=(0, 2, 1))
         else:
-            raise ValueError("Either inverse_bind_mats or bind_pose_matrices must be provided")
+            raise ValueError(
+                "Either inverse_bind_mats or bind_pose_matrices must be provided"
+            )
 
 
 class Mesh:
@@ -60,30 +62,24 @@ class Mesh:
 
 
 class ModelImporter(ABC):
-    """Abstract base class for 3D model importers (GLB, FBX, etc.)
-    """
+    """Abstract base class for 3D model importers (GLB, FBX, etc.)"""
 
     @property
     @abstractmethod
-    def JointNames(self) -> List[str]:
-        ...
+    def JointNames(self) -> List[str]: ...
 
     @property
     @abstractmethod
-    def JointParents(self) -> List[str]:
-        ...
+    def JointParents(self) -> List[str]: ...
 
     @property
     @abstractmethod
-    def JointMatrices(self) -> np.ndarray:
-        ...
+    def JointMatrices(self) -> np.ndarray: ...
 
     @property
     @abstractmethod
-    def Meshes(self) -> List[Mesh]:
-        ...
+    def Meshes(self) -> List[Mesh]: ...
 
     @property
     @abstractmethod
-    def Skin(self) -> Optional[Skin]:
-        ...
+    def Skin(self) -> Optional[Skin]: ...

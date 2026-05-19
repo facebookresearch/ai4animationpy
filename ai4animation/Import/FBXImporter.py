@@ -5,8 +5,9 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
+
 def _ensure_fbx_sdk_loaded() -> None:
-    if "FbxManager" in globals():
+    if globals().get("FbxManager") is not None:
         return
 
     try:
@@ -31,27 +32,45 @@ def _ensure_fbx_sdk_loaded() -> None:
             "Install guide:\n"
             "  1. Download FBX SDK from https://aps.autodesk.com/developer/overview/fbx-sdk \n"
             "  2. Download FBX SDK Python Bindings\n"
-            "  3. Set FBXSDK_ROOT env var to the FBX SDK install path (i.e. $env:FBXSDK_ROOT = \"C:\\Program Files\\Autodesk\\FBX\\FBX SDK\\\\2020.3.9\") \n"
-            "  4. Set FBXSDK_COMPILER env var (i.e. $env:FBXSDK_COMPILER=\"vs2022\")\n"
+            '  3. Set FBXSDK_ROOT env var to the FBX SDK install path (i.e. $env:FBXSDK_ROOT = "C:\\Program Files\\Autodesk\\FBX\\FBX SDK\\\\2020.3.9") \n'
+            '  4. Set FBXSDK_COMPILER env var (i.e. $env:FBXSDK_COMPILER="vs2022")\n'
             "  5. pip install --force-reinstall -v sip==6.6.2\n"
             "  6. pip install . (in the Python Bindings folder)\n"
         ) from exc
 
-    globals().update({
-        "FbxAnimLayer": FbxAnimLayer,
-        "FbxAnimStack": FbxAnimStack,
-        "FbxAxisSystem": FbxAxisSystem,
-        "FbxCriteria": FbxCriteria,
-        "FbxDeformer": FbxDeformer,
-        "FbxGeometryConverter": FbxGeometryConverter,
-        "FbxImporter": FbxImporter,
-        "FbxIOSettings": FbxIOSettings,
-        "FbxLayerElement": FbxLayerElement,
-        "FbxManager": FbxManager,
-        "FbxScene": FbxScene,
-        "FbxTime": FbxTime,
-        "IOSROOT": IOSROOT,
-    })
+    globals().update(
+        {
+            "FbxAnimLayer": FbxAnimLayer,
+            "FbxAnimStack": FbxAnimStack,
+            "FbxAxisSystem": FbxAxisSystem,
+            "FbxCriteria": FbxCriteria,
+            "FbxDeformer": FbxDeformer,
+            "FbxGeometryConverter": FbxGeometryConverter,
+            "FbxImporter": FbxImporter,
+            "FbxIOSettings": FbxIOSettings,
+            "FbxLayerElement": FbxLayerElement,
+            "FbxManager": FbxManager,
+            "FbxScene": FbxScene,
+            "FbxTime": FbxTime,
+            "IOSROOT": IOSROOT,
+        }
+    )
+
+
+# Declared for static analysis; populated at runtime by _ensure_fbx_sdk_loaded()
+FbxAnimLayer = None
+FbxAnimStack = None
+FbxAxisSystem = None
+FbxCriteria = None
+FbxDeformer = None
+FbxGeometryConverter = None
+FbxImporter = None
+FbxIOSettings = None
+FbxLayerElement = None
+FbxManager = None
+FbxScene = None
+FbxTime = None
+IOSROOT = None
 
 from ai4animation.Animation.Motion import Hierarchy, Motion
 from ai4animation.Import.ModelImporter import Mesh, ModelImporter, Skin
@@ -64,8 +83,14 @@ class Node:
         self.Index = index
         self.Parent = parent
         self.Children = children
-        self.Translation = Vector3.Create() if translation is None else Vector3.Create(translation)
-        self.Rotation = Quaternion.ToMatrix(Quaternion.Create()) if rotation is None else Quaternion.ToMatrix(Quaternion.Create(rotation))
+        self.Translation = (
+            Vector3.Create() if translation is None else Vector3.Create(translation)
+        )
+        self.Rotation = (
+            Quaternion.ToMatrix(Quaternion.Create())
+            if rotation is None
+            else Quaternion.ToMatrix(Quaternion.Create(rotation))
+        )
         self.LocalMatrix = Transform.TR(self.Translation, self.Rotation)
 
 
@@ -96,7 +121,9 @@ def _detect_framerate(scene, anim_stack, flat_nodes):
     if framerate >= 15:
         return framerate
 
-    num_layers = anim_stack.GetSrcObjectCount(FbxCriteria.ObjectType(FbxAnimLayer.ClassId))
+    num_layers = anim_stack.GetSrcObjectCount(
+        FbxCriteria.ObjectType(FbxAnimLayer.ClassId)
+    )
     if num_layers > 0:
         layer = anim_stack.GetSrcObject(FbxCriteria.ObjectType(FbxAnimLayer.ClassId), 0)
         for fbx_node, _ in flat_nodes:
@@ -130,7 +157,9 @@ def _extract_normals(fbx_mesh, num_vertices):
                 if reference == FbxLayerElement.EReferenceMode.eDirect:
                     n = layer_normals.GetDirectArray().GetAt(vi)
                 elif reference == FbxLayerElement.EReferenceMode.eIndexToDirect:
-                    n = layer_normals.GetDirectArray().GetAt(layer_normals.GetIndexArray().GetAt(vi))
+                    n = layer_normals.GetDirectArray().GetAt(
+                        layer_normals.GetIndexArray().GetAt(vi)
+                    )
                 else:
                     continue
                 normals[vi] = [n[0], n[1], n[2]]
@@ -145,7 +174,9 @@ def _extract_normals(fbx_mesh, num_vertices):
                     if reference == FbxLayerElement.EReferenceMode.eDirect:
                         n = layer_normals.GetDirectArray().GetAt(pv_idx)
                     elif reference == FbxLayerElement.EReferenceMode.eIndexToDirect:
-                        n = layer_normals.GetDirectArray().GetAt(layer_normals.GetIndexArray().GetAt(pv_idx))
+                        n = layer_normals.GetDirectArray().GetAt(
+                            layer_normals.GetIndexArray().GetAt(pv_idx)
+                        )
                     else:
                         pv_idx += 1
                         continue
@@ -160,6 +191,7 @@ def _extract_normals(fbx_mesh, num_vertices):
     norms[norms == 0] = 1.0
     normals /= norms
     return normals
+
 
 def _extract_skin(fbx_mesh, num_vertices, bone_name_to_joint_idx):
     skin_indices = np.zeros((num_vertices, 4), dtype=np.int64)
@@ -210,15 +242,19 @@ def _extract_animation(flat_nodes, scene, anim_stack, timestamps, unit_scale):
     num_frames = len(timestamps)
 
     anim_layer = None
-    num_layers = anim_stack.GetSrcObjectCount(FbxCriteria.ObjectType(FbxAnimLayer.ClassId))
+    num_layers = anim_stack.GetSrcObjectCount(
+        FbxCriteria.ObjectType(FbxAnimLayer.ClassId)
+    )
     if num_layers > 0:
-        anim_layer = anim_stack.GetSrcObject(FbxCriteria.ObjectType(FbxAnimLayer.ClassId), 0)
+        anim_layer = anim_stack.GetSrcObject(
+            FbxCriteria.ObjectType(FbxAnimLayer.ClassId), 0
+        )
 
     translations = np.zeros((num_frames, num_nodes, 3), dtype=np.float32)
     rotations = np.zeros((num_frames, num_nodes, 4), dtype=np.float32)
     rotations[..., 3] = 1.0
 
-    #only consider animated nodes
+    # only consider animated nodes
     animated_indices = []
     animated_fbx_nodes = []
     for ni, (fbx_node, _) in enumerate(flat_nodes):
@@ -237,13 +273,17 @@ def _extract_animation(flat_nodes, scene, anim_stack, timestamps, unit_scale):
         else:
             m = fbx_node.EvaluateLocalTransform()
             t, q = m.GetT(), m.GetQ()
-            translations[:, ni] = [t[0] * unit_scale, t[1] * unit_scale, t[2] * unit_scale]
+            translations[:, ni] = [
+                t[0] * unit_scale,
+                t[1] * unit_scale,
+                t[2] * unit_scale,
+            ]
             rotations[:, ni] = [q[0], q[1], q[2], q[3]]
 
     num_animated = len(animated_indices)
     print(f"[FBX] {num_nodes} nodes, {num_frames} frames")
 
-    #this needs to be optimized
+    # this needs to be optimized
     eval_time = FbxTime()
     us = unit_scale
     for fi in range(num_frames):
@@ -272,6 +312,32 @@ class FBX(ModelImporter):
         _ensure_fbx_sdk_loaded()
         self._path = path
 
+        manager, scene, flat_nodes, unit_scale = self._load_scene(path)
+
+        num_nodes = len(flat_nodes)
+        skeleton_node_indices = self._find_skeleton_indices(flat_nodes)
+        final_names = self._resolve_node_names(flat_nodes, skeleton_node_indices)
+
+        self._build_node_hierarchy(flat_nodes, final_names, unit_scale)
+
+        bone_name_to_joint_idx = self._build_joint_mappings(skeleton_node_indices)
+        self._extract_all_meshes(flat_nodes, unit_scale, bone_name_to_joint_idx)
+
+        skin_joint_node_indices = sorted(skeleton_node_indices)
+        self._skin: Optional[Skin] = None
+        if len(skin_joint_node_indices) > 0:
+            bind_pose_matrices = self._nodeGlobalMatrices[skin_joint_node_indices]
+            joints = np.array(skin_joint_node_indices, dtype=np.int64)
+            self._skin = Skin(joints=joints, bind_pose_matrices=bind_pose_matrices)
+            print(f"[FBX] Extracted skin with {len(skin_joint_node_indices)} joints")
+
+        self._animation: Optional[Animation] = None
+        self._load_animation_data(scene, flat_nodes, num_nodes, unit_scale)
+
+        manager.Destroy()
+
+    @staticmethod
+    def _load_scene(path):
         manager = FbxManager.Create()
         ios = FbxIOSettings.Create(manager, IOSROOT)
         manager.SetIOSettings(ios)
@@ -289,13 +355,14 @@ class FBX(ModelImporter):
         FbxAxisSystem.MayaYUp.ConvertScene(scene)
         unit_scale = _get_unit_scale(scene)
 
-        # Triangulate all meshes
         converter = FbxGeometryConverter(manager)
         converter.Triangulate(scene, True)
 
         flat_nodes = _collect_nodes(scene.GetRootNode())
-        num_nodes = len(flat_nodes)
+        return manager, scene, flat_nodes, unit_scale
 
+    @staticmethod
+    def _find_skeleton_indices(flat_nodes):
         skin_cluster_bone_names = set()
         for fbx_node, _ in flat_nodes:
             mesh = fbx_node.GetMesh()
@@ -308,37 +375,34 @@ class FBX(ModelImporter):
                     if bone is not None:
                         skin_cluster_bone_names.add(bone.GetName())
 
-        # Map original FBX names to flat_nodes indices
         orig_name_to_indices: Dict[str, List[int]] = {}
         for i, (fbx_node, _) in enumerate(flat_nodes):
             orig_name_to_indices.setdefault(fbx_node.GetName(), []).append(i)
 
-        # Find skeleton node indices (cluster bones + all ancestors)
         skeleton_node_indices = set()
         for bone_name in skin_cluster_bone_names:
             for ni in orig_name_to_indices.get(bone_name, []):
                 skeleton_node_indices.add(ni)
-                # Walk up parent chain
                 pi = flat_nodes[ni][1]
                 while pi >= 0:
                     skeleton_node_indices.add(pi)
                     pi = flat_nodes[pi][1]
 
-        # set of node indices that are part of skeleton
-        skin_joint_node_idx_set = skeleton_node_indices
+        return skeleton_node_indices
 
-        # assign original names to skin joints first
+    @staticmethod
+    def _resolve_node_names(flat_nodes, skeleton_node_indices):
+        num_nodes = len(flat_nodes)
         final_names = [None] * num_nodes
         claimed_names = set()
         for i, (fbx_node, _) in enumerate(flat_nodes):
-            if i in skin_joint_node_idx_set:
+            if i in skeleton_node_indices:
                 name = fbx_node.GetName()
                 if name not in claimed_names:
                     final_names[i] = name
                     claimed_names.add(name)
 
-        #assign names to remaining nodes
-        name_counts = {name: 0 for name in claimed_names}
+        name_counts = dict.fromkeys(claimed_names, 0)
         for i, (fbx_node, _) in enumerate(flat_nodes):
             if final_names[i] is not None:
                 continue
@@ -350,23 +414,29 @@ class FBX(ModelImporter):
                 name_counts[name] = 0
                 final_names[i] = name
 
-        # --- Build node hierarchy ---
+        return final_names
+
+    def _build_node_hierarchy(self, flat_nodes, final_names, unit_scale):
+        num_nodes = len(flat_nodes)
         self._nodes: List[Node] = []
-        node_name_to_idx: Dict[str, int] = {}
         for i, (fbx_node, parent_idx) in enumerate(flat_nodes):
             m = fbx_node.EvaluateLocalTransform()
             t = m.GetT()
             q = m.GetQ()
-            name = final_names[i]
-            node_name_to_idx[name] = i
-            self._nodes.append(Node(
-                name=name,
-                index=i,
-                parent=parent_idx if parent_idx >= 0 else None,
-                children=[],
-                translation=(t[0] * unit_scale, t[1] * unit_scale, t[2] * unit_scale),
-                rotation=(q[0], q[1], q[2], q[3]),
-            ))
+            self._nodes.append(
+                Node(
+                    name=final_names[i],
+                    index=i,
+                    parent=parent_idx if parent_idx >= 0 else None,
+                    children=[],
+                    translation=(
+                        t[0] * unit_scale,
+                        t[1] * unit_scale,
+                        t[2] * unit_scale,
+                    ),
+                    rotation=(q[0], q[1], q[2], q[3]),
+                )
+            )
 
         for node in self._nodes:
             if node.Parent is not None:
@@ -382,31 +452,21 @@ class FBX(ModelImporter):
         self._nodeGlobalMatrices = np.zeros((num_nodes, 4, 4), dtype=np.float32)
         for idx, node in enumerate(self._nodes):
             self._nodeGlobalMatrices[idx] = (
-                node.LocalMatrix if node.Parent is None
-                else Transform.Multiply(self._nodeGlobalMatrices[node.Parent], node.LocalMatrix)
+                node.LocalMatrix
+                if node.Parent is None
+                else Transform.Multiply(
+                    self._nodeGlobalMatrices[node.Parent], node.LocalMatrix
+                )
             )
 
-        # Maps FBX node object id to our node index
-        fbx_node_id_to_idx: Dict[int, int] = {}
-        for i, (fbx_node, _) in enumerate(flat_nodes):
-            fbx_node_id_to_idx[id(fbx_node)] = i
-
-        # Use the expanded skeleton set (cluster bones + all ancestors)
+    def _build_joint_mappings(self, skeleton_node_indices):
         skin_joint_node_indices = sorted(skeleton_node_indices)
-        skin_joint_idx_set = skeleton_node_indices
-
-        # Map from FBX bone node id to joint index (for skin weight extraction)
-        fbx_bone_id_to_joint_idx: Dict[int, int] = {}
-        for ji, ni in enumerate(skin_joint_node_indices):
-            fbx_bone_id_to_joint_idx[id(flat_nodes[ni][0])] = ji
-
-        # Build name-based joint lookup for skin extraction
         bone_name_to_joint_idx: Dict[str, int] = {}
         for ji, ni in enumerate(skin_joint_node_indices):
-            bone_name = self._nodeNames[ni]
-            bone_name_to_joint_idx[bone_name] = ji
+            bone_name_to_joint_idx[self._nodeNames[ni]] = ji
+        return bone_name_to_joint_idx
 
-        # --- Extract meshes ---
+    def _extract_all_meshes(self, flat_nodes, unit_scale, bone_name_to_joint_idx):
         self._meshes: List[Mesh] = []
         for fbx_node, _ in flat_nodes:
             mesh = fbx_node.GetMesh()
@@ -432,65 +492,78 @@ class FBX(ModelImporter):
             actually_skinned = np.any(skin_w > 0)
             if actually_skinned:
                 max_bone_idx = skin_idx.max()
-                print(f"[FBX]   Mesh '{fbx_node.GetName()}': {num_verts} verts, {num_polys} tris, skinned, "
-                      f"max_bone_idx={max_bone_idx}, weight_range=[{skin_w[skin_w>0].min():.4f}, {skin_w.max():.4f}], "
-                      f"verts_range=[{vertices.min():.4f}, {vertices.max():.4f}]")
+                print(
+                    f"[FBX]   Mesh '{fbx_node.GetName()}': {num_verts} verts, {num_polys} tris, skinned, "
+                    f"max_bone_idx={max_bone_idx}, weight_range=[{skin_w[skin_w > 0].min():.4f}, {skin_w.max():.4f}], "
+                    f"verts_range=[{vertices.min():.4f}, {vertices.max():.4f}]"
+                )
             else:
-                print(f"[FBX]   Mesh '{fbx_node.GetName()}': {num_verts} verts, {num_polys} tris, NOT skinned")
+                print(
+                    f"[FBX]   Mesh '{fbx_node.GetName()}': {num_verts} verts, {num_polys} tris, NOT skinned"
+                )
 
-            self._meshes.append(Mesh(
-                name=fbx_node.GetName(),
-                vertices=vertices,
-                normals=normals,
-                triangles=triangles,
-                skin_indices=skin_idx if actually_skinned else np.zeros((0, 4), dtype=np.int64),
-                skin_weights=skin_w if actually_skinned else np.zeros((0, 4), dtype=np.float32),
-            ))
+            self._meshes.append(
+                Mesh(
+                    name=fbx_node.GetName(),
+                    vertices=vertices,
+                    normals=normals,
+                    triangles=triangles,
+                    skin_indices=(
+                        skin_idx
+                        if actually_skinned
+                        else np.zeros((0, 4), dtype=np.int64)
+                    ),
+                    skin_weights=(
+                        skin_w
+                        if actually_skinned
+                        else np.zeros((0, 4), dtype=np.float32)
+                    ),
+                )
+            )
 
         print(f"[FBX] Extracted {len(self._meshes)} meshes")
 
-        # --- Skin ---
-        self._skin: Optional[Skin] = None
-        if len(skin_joint_node_indices) > 0:
-            bind_pose_matrices = self._nodeGlobalMatrices[skin_joint_node_indices]
-            joints = np.array(skin_joint_node_indices, dtype=np.int64)
-            self._skin = Skin(joints=joints, bind_pose_matrices=bind_pose_matrices)
-            print(f"[FBX] Extracted skin with {len(skin_joint_node_indices)} joints")
+    def _load_animation_data(self, scene, flat_nodes, num_nodes, unit_scale):
+        num_stacks = scene.GetSrcObjectCount(
+            FbxCriteria.ObjectType(FbxAnimStack.ClassId)
+        )
+        if num_stacks == 0:
+            return
 
-        # --- Animation ---
-        self._animation: Optional[Animation] = None
-        num_stacks = scene.GetSrcObjectCount(FbxCriteria.ObjectType(FbxAnimStack.ClassId))
+        anim_stack = scene.GetSrcObject(FbxCriteria.ObjectType(FbxAnimStack.ClassId), 0)
+        scene.SetCurrentAnimationStack(anim_stack)
 
-        if num_stacks > 0:
-            anim_stack = scene.GetSrcObject(FbxCriteria.ObjectType(FbxAnimStack.ClassId), 0)
-            scene.SetCurrentAnimationStack(anim_stack)
+        ts = anim_stack.GetLocalTimeSpan()
+        t_start = ts.GetStart().GetSecondDouble()
+        t_end = ts.GetStop().GetSecondDouble()
+        duration = t_end - t_start
+        framerate = _detect_framerate(scene, anim_stack, flat_nodes)
 
-            ts = anim_stack.GetLocalTimeSpan()
-            t_start = ts.GetStart().GetSecondDouble()
-            t_end = ts.GetStop().GetSecondDouble()
-            duration = t_end - t_start
-            framerate = _detect_framerate(scene, anim_stack, flat_nodes)
+        if duration <= 0:
+            return
 
-            if duration > 0:
-                num_frames = max(int(round(duration * framerate)) + 1, 2)
-                timestamps = np.linspace(t_start, t_end, num_frames)
-                print(f"[FBX] {num_nodes} nodes, {num_frames} frames, {framerate} fps, {duration:.2f}s")
+        num_frames = max(int(round(duration * framerate)) + 1, 2)
+        timestamps = np.linspace(t_start, t_end, num_frames)
+        print(
+            f"[FBX] {num_nodes} nodes, {num_frames} frames, {framerate} fps, {duration:.2f}s"
+        )
 
-                local_matrices = _extract_animation(
-                    flat_nodes, scene, anim_stack, timestamps, unit_scale
+        local_matrices = _extract_animation(
+            flat_nodes, scene, anim_stack, timestamps, unit_scale
+        )
+        # FK
+        global_matrices = np.zeros((num_frames, num_nodes, 4, 4), dtype=np.float32)
+        for ni, node in enumerate(self._nodes):
+            global_matrices[:, ni] = (
+                local_matrices[:, ni]
+                if node.Parent is None
+                else Transform.Multiply(
+                    global_matrices[:, node.Parent], local_matrices[:, ni]
                 )
-                # FK
-                global_matrices = np.zeros((num_frames, num_nodes, 4, 4), dtype=np.float32)
-                for ni, node in enumerate(self._nodes):
-                    global_matrices[:, ni] = (
-                        local_matrices[:, ni] if node.Parent is None
-                        else Transform.Multiply(global_matrices[:, node.Parent], local_matrices[:, ni])
-                    )
+            )
 
-                self._animation = Animation(framerate, local_matrices, global_matrices)
-                print(f"[FBX] Done")
-
-        manager.Destroy()
+        self._animation = Animation(framerate, local_matrices, global_matrices)
+        print("[FBX] Done")
 
     # --- ModelImporter interface ---
 
@@ -594,7 +667,11 @@ class FBX(ModelImporter):
             parentNames = [p.Name if p is not None else None for p in parents]
             hierarchy = Hierarchy(names, parentNames)
             name_to_index = {node.Name: i for i, node in enumerate(self._nodes)}
-            indices = [name_to_index[name] for name in hierarchy.BoneNames if name in name_to_index]
+            indices = [
+                name_to_index[name]
+                for name in hierarchy.BoneNames
+                if name in name_to_index
+            ]
             frames = anim.GlobalTransformations[:, indices]
 
         if floor is not None:
@@ -620,4 +697,6 @@ class FBX(ModelImporter):
             print(f"Skin: {len(self.JointNames)} joints")
         if self._animation:
             a = self._animation
-            print(f"Animation: {a.Framerate} fps, {a.GlobalTransformations.shape[0]} frames")
+            print(
+                f"Animation: {a.Framerate} fps, {a.GlobalTransformations.shape[0]} frames"
+            )

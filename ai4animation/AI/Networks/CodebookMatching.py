@@ -262,7 +262,7 @@ class Sampler(nn.Module):
         self.train()
 
         # Denoiser
-        U = torch.rand(1).to(target.device)
+        U = torch.rand(1, device=target.device)
         seed = (1 - U) * target + U * source
         denoised = self.Prior.manifold(
             self.Denoiser(seed, input), False
@@ -384,7 +384,7 @@ class Model(nn.Module):
         estimate = self.manifold(self.Estimator(input), False)  # Softmax Probabilities
 
         # Denoiser
-        U = torch.rand(1).to(target.device)
+        U = torch.rand(1, device=target.device)
         seed = (1 - U) * target + U * codes
         denoised = self.manifold(
             self.Denoiser(seed, input), False

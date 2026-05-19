@@ -1,6 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Threaded data sampler for asynchronous batch loading during training."""
+
 import os
-import time
 from collections import deque
 from concurrent.futures import as_completed, ThreadPoolExecutor
 
@@ -60,11 +61,25 @@ class DataSampler:
             for m in self.Motions
         ]
 
-        self.SampleCount = sum([len(t) for t in self.Timestamps])
-        print("Training Samples:", self.SampleCount)
+        self.Samples = sum([len(t) for t in self.Timestamps])
+        print(f"Training Samples: {self.TrainingSamples} / {self.Samples}")
+        print(f"Training Batches: {self.BatchCount} @ {self.BatchSize}")
+        print(f"Motion Duration: {self.Duration(self.TrainingSamples)}")
 
-        # self.BatchCount = (self.SampleCount // self.BatchSize) + 1
-        # print("Batch Count:", self.BatchCount)
+    @property
+    def BatchCount(self):
+        return self.Samples // self.BatchSize
+
+    @property
+    def TrainingSamples(self):
+        return self.BatchCount * self.BatchSize
+
+    def Duration(self, samples):
+        total_sec = float(samples) / float(self.Framerate)
+        hrs = int(total_sec // 3600)
+        mins = int((total_sec % 3600) // 60)
+        secs = int(total_sec % 60)
+        return f"{hrs}h {mins}m {secs}s"
 
     # Creates batch of lists [[Motion=1, Timestamp=1]]
     def SampleBatchesAcrossMotions(self):
@@ -76,26 +91,26 @@ class DataSampler:
 
         batches = [
             self.DataBatch(self.Function, samples[i : i + self.BatchSize])
-            for i in range(0, self.SampleCount, self.BatchSize)
+            for i in range(0, self.Samples, self.BatchSize)
         ]
         print("Training Batches:", len(batches))
         return batches
 
     # Creates batch of tuples [(Motion=1, [Timestamps=N])]
     def SampleBatchesWithinMotions(self, current_epoch, total_epochs):
+        indices = np.arange(len(self.Motions))
         probabilities = [
-            len(self.Timestamps[i]) / self.SampleCount for i in range(len(self.Motions))
+            len(self.Timestamps[i]) / self.Samples for i in range(len(self.Motions))
         ]
         batches = []
-        for i in range(0, self.SampleCount, self.BatchSize):
-            items = min(self.SampleCount - i, self.BatchSize)
-            index = np.random.choice(np.arange(len(self.Motions)), 1, probabilities)[0]
+        for _ in range(self.BatchCount):
+            index = np.random.choice(indices, 1, probabilities)[0]
             batches.append(
                 self.DataBatch(
                     self.Function,
                     (
                         self.Motions[index],
-                        np.random.choice(self.Timestamps[index], items),
+                        np.random.choice(self.Timestamps[index], self.BatchSize),
                     ),
                 )
             )

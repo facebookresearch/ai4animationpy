@@ -156,12 +156,16 @@ class Dropdown:
                             False,
                             True,
                             canvas=self.Canvas,
-                            color_default=AI4Animation.Color.ORANGE
-                            if colors is not None and colors[i]
-                            else None,
-                            color_hovered=AI4Animation.Color.ORANGE
-                            if colors is not None and colors[i]
-                            else None,
+                            color_default=(
+                                AI4Animation.Color.ORANGE
+                                if colors is not None and colors[i]
+                                else None
+                            ),
+                            color_hovered=(
+                                AI4Animation.Color.ORANGE
+                                if colors is not None and colors[i]
+                                else None
+                            ),
                         )
                     )
             for i in range(len(self.Items)):
@@ -211,11 +215,15 @@ class TextField:
         rl.DrawRectangleLinesEx(
             screenRectangle.Tuple(),
             2.0,
-            AI4Animation.Color.BLACK
-            if self.Selected
-            else AI4Animation.Color.LIGHTGRAY
-            if self.IsHovered()
-            else AI4Animation.Color.WHITE,
+            (
+                AI4Animation.Color.BLACK
+                if self.Selected
+                else (
+                    AI4Animation.Color.LIGHTGRAY
+                    if self.IsHovered()
+                    else AI4Animation.Color.WHITE
+                )
+            ),
         )
 
         if self.BecomesSelected():
@@ -321,20 +329,24 @@ class Button:
         screenRectangle = rectangle.Screen()
         rl.DrawRectangleRec(
             screenRectangle.Tuple(),
-            self.ColorActive
-            if self.Active
-            else self.ColorHovered
-            if self.IsHovered()
-            else self.ColorDefault,
+            (
+                self.ColorActive
+                if self.Active
+                else self.ColorHovered
+                if self.IsHovered()
+                else self.ColorDefault
+            ),
         )
         rl.DrawRectangleLinesEx(
             screenRectangle.Tuple(),
             2.0,
-            self.BorderActive
-            if self.Active
-            else self.BorderHovered
-            if self.IsHovered()
-            else self.BorderDefault,
+            (
+                self.BorderActive
+                if self.Active
+                else self.BorderHovered
+                if self.IsHovered()
+                else self.BorderDefault
+            ),
         )
 
         size = rectangle.height * 0.75
@@ -490,6 +502,43 @@ class Rectangle:
         return Rectangle(self.x, self.y, self.width, self.height)
 
 
+def _clamp_value(value, min_val, max_val):
+    if min_val is not None and value < min_val:
+        return min_val
+    if max_val is not None and value > max_val:
+        return max_val
+    return value
+
+
+def _draw_curve_legend(
+    curveLabels, colors, plot_left, plot_right, label_height, legend_font_size, y, h
+):
+    legend_row_y = y + 0.015 + label_height
+    marker_size = 0.012
+    marker_gap = 0.006
+    legend_count = len(curveLabels)
+    slot_width = (plot_right - plot_left) / legend_count
+    for idx, curveLabel in enumerate(curveLabels):
+        text_width = (
+            rl.MeasureText(Utility.ToBytes(curveLabel), legend_font_size)
+            / ScreenWidth()
+        )
+        item_width = marker_size + marker_gap + text_width
+        slot_left = plot_left + idx * slot_width
+        item_x = slot_left + (slot_width - item_width) / 2.0
+        marker = Rectangle(
+            item_x, legend_row_y + 0.002, marker_size, marker_size
+        ).Screen()
+        rl.DrawRectangleRec(marker.Tuple(), colors[idx % len(colors)])
+        AI4Animation.Draw.Text(
+            curveLabel,
+            item_x + marker_size + marker_gap,
+            legend_row_y,
+            size=h / 9.0,
+            color=AI4Animation.Color.BLACK,
+        )
+
+
 def CurvePlot(
     x,
     y,
@@ -582,12 +631,8 @@ def CurvePlot(
     for row in range(rows):
         color = colors[row % len(colors)]
         for col in range(1, cols):
-            prev_value = values[row, col - 1]
-            next_value = values[row, col]
-            prev_value = min if min is not None and prev_value < min else prev_value
-            prev_value = max if max is not None and prev_value > max else prev_value
-            next_value = min if min is not None and next_value < min else next_value
-            next_value = max if max is not None and next_value > max else next_value
+            prev_value = _clamp_value(values[row, col - 1], min, max)
+            next_value = _clamp_value(values[row, col], min, max)
 
             x1 = ScreenWidth() * Utility.Normalize(
                 col - 1, 0, cols - 1, plot_left, plot_right
@@ -603,9 +648,7 @@ def CurvePlot(
             )
             rl.DrawLine(int(x1), int(y1), int(x2), int(y2), color)
 
-        final_value = values[row, -1]
-        final_value = min if min is not None and final_value < min else final_value
-        final_value = max if max is not None and final_value > max else final_value
+        final_value = _clamp_value(values[row, -1], min, max)
         final_x = ScreenWidth() * plot_right
         final_y = ScreenHeight() * Utility.Normalize(
             final_value, values_min, values_max, plot_bottom, plot_top
@@ -625,55 +668,69 @@ def CurvePlot(
         )
 
     if legend_count > 0:
-        legend_row_y = y + 0.015 + label_height
-        marker_size = 0.012
-        marker_gap = 0.006
-        slot_width = (plot_right - plot_left) / legend_count
-        for idx, curveLabel in enumerate(curveLabels):
-            text_width = (
-                rl.MeasureText(Utility.ToBytes(curveLabel), legend_font_size)
-                / ScreenWidth()
-            )
-            item_width = marker_size + marker_gap + text_width
-            slot_left = plot_left + idx * slot_width
-            item_x = slot_left + (slot_width - item_width) / 2.0
-            marker = Rectangle(
-                item_x, legend_row_y + 0.002, marker_size, marker_size
-            ).Screen()
-            rl.DrawRectangleRec(marker.Tuple(), colors[idx % len(colors)])
-            AI4Animation.Draw.Text(
-                curveLabel,
-                item_x + marker_size + marker_gap,
-                legend_row_y,
-                size=h / 9.0,
-                color=AI4Animation.Color.BLACK,
-            )
+        _draw_curve_legend(
+            curveLabels,
+            colors,
+            plot_left,
+            plot_right,
+            label_height,
+            legend_font_size,
+            y,
+            h,
+        )
 
 
-def BarPlot(x, y, w, h, values, label=None, min=None, max=None):
+def BarPlot(
+    x,
+    y,
+    w,
+    h,
+    values,
+    label=None,
+    min=None,
+    max=None,
+    colors=None,
+    backgroundColor=None,
+    frameColor=None,
+):
     if len(values.shape) > 3:
         print(
             "Drawing bar plot for tensors with more than 2 dimensions is not supported."
         )
         return
+
+    if len(values.shape) == 1:
+        values = values.reshape(1, -1)
+
     rectangle = Rectangle(x, y, w, h)
     screenRectangle = rectangle.Screen()
-    rl.DrawRectangleRec(
-        screenRectangle.Tuple(), Utility.Opacity(AI4Animation.Color.WHITE, 0.5)
+
+    backgroundColor = (
+        Utility.Opacity(AI4Animation.Color.WHITE, 0.5)
+        if backgroundColor is None
+        else backgroundColor
     )
+    frameColor = AI4Animation.Color.BLACK if frameColor is None else frameColor
+    if colors is None:
+        colors = [AI4Animation.Color.BLACK]
+
+    rl.DrawRectangleRec(screenRectangle.Tuple(), backgroundColor)
+
     rows = values.shape[0]
     cols = values.shape[1]
 
     bar_width = w / cols
     bar_height = h / rows
+    row_gap = bar_height * 0.15
+    bar_inner_height = bar_height - row_gap
     for row in range(rows):
+        color = colors[row % len(colors)]
         for col in range(cols):
             value = values[row, col]
             if min is not None and max is not None:
-                value = min if value < min else value
-                value = max if value > max else value
+                value = _clamp_value(value, min, max)
                 value = Utility.Normalize(value, min, max, 0.0, 1.0)
-            ratio = bar_height * value
+            ratio = bar_inner_height * value
             bar_x = ScreenWidth() * (
                 (x + w - bar_width)
                 if cols == 1
@@ -688,8 +745,10 @@ def BarPlot(x, y, w, h, values, label=None, min=None, max=None):
             )
             bar_w = ScreenWidth() * bar_width
             bar_h = ScreenHeight() * ratio
-            rl.DrawRectangleRec((bar_x, bar_y, bar_w, bar_h), AI4Animation.Color.BLACK)
-    rl.DrawRectangleLinesEx(screenRectangle.Tuple(), 2.0, AI4Animation.Color.BLACK)
+            rl.DrawRectangleRec((bar_x, bar_y, bar_w, bar_h), color)
+
+    rl.DrawRectangleLinesEx(screenRectangle.Tuple(), 2.0, frameColor)
+
     if label is not None:
         AI4Animation.Draw.Text(
             label,

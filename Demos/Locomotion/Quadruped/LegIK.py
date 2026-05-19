@@ -1,6 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 from ai4animation import FABRIK, Rotation, Vector3
 
+
 class LegIK:
     def __init__(self, ik: FABRIK):
         self.IK = ik
@@ -19,7 +20,6 @@ class LegIK:
         maxIterations: int,
         maxAccuracy: float,
     ):
-
         self.TargetPosition = Vector3.Lerp(
             self.IK.LastBone().GetPosition(), self.TargetPosition, contact
         )

@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""FABRIK (Forward And Backward Reaching Inverse Kinematics) solver."""
+
 from typing import List, Optional
 
 from ai4animation.Components.Actor import Actor

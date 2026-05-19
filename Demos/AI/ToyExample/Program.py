@@ -1,27 +1,40 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 import numpy as np
 import torch
-from ai4animation import AI4Animation, MultiLayerPerceptron, Plotting, Tensor, Utility
+from ai4animation import (
+    AI4Animation,
+    CosineAnnealingOptimizer,
+    MultiLayerPerceptron,
+    Plotting,
+    Tensor,
+)
+
+EPOCH_COUNT = 150
+BATCH_SIZE = 32
+BATCH_COUNT = 100
+DRAW_INTERVAL = 250
 
 
 class Program:
     def Start(self):
-        self.EpochCount = 150
-        self.BatchSize = 32
-        self.BatchCount = 10
-        self.SampleCount = self.BatchSize * self.BatchCount
-        self.DrawInterval = 500
         self.Network = Tensor.ToDevice(
-            MultiLayerPerceptron.Model(input_dim=1, output_dim=100, hidden_dim=128)
+            MultiLayerPerceptron.Model(
+                input_dim=1,
+                output_dim=100,
+                hidden_dim=128,
+            )
         )
 
-        self.Optimizer = Utility.CosineAnnealingOptimizer(
+        self.Optimizer = CosineAnnealingOptimizer(
             self.Network.parameters(),
-            self.BatchSize,
-            self.SampleCount,
+            BATCH_SIZE,
+            BATCH_COUNT,
         )
         self.LossHistory = Plotting.LossHistory(
-            "Loss History", drawInterval=self.DrawInterval, yScale="log"
+            "Loss History",
+            BATCH_COUNT,
+            drawInterval=DRAW_INTERVAL,
+            yScale="log",
         )
         self.Trainer = self.Training()
 
@@ -32,29 +45,28 @@ class Program:
             pass
 
     def Training(self):
-        for e in range(1, self.EpochCount + 1):
+        for e in range(1, EPOCH_COUNT + 1):
             print("Epoch", e)
-            for _ in range(self.BatchCount):
+            for _ in range(BATCH_COUNT):
                 x = self.GetInput()
                 y = self.GetOutput(x)
                 xBatch = Tensor.ToDevice(torch.tensor(x, dtype=torch.float32))
                 yBatch = Tensor.ToDevice(torch.tensor(y, dtype=torch.float32))
                 _, loss = self.Network.learn(xBatch, yBatch, e == 1)
-                self.Optimizer.Update(yBatch.shape[0], loss["MSE Loss"])
-                for k, v in loss.items():
-                    self.LossHistory.Add((Plotting.ToNumpy(v), k))
+                self.Optimizer.Update(loss)
+                self.LossHistory.Add(loss)
                 yield
             self.LossHistory.Print()
 
     def GetInput(self):
-        x = np.random.uniform(0, 1, self.BatchSize)
-        x = x.reshape(self.BatchSize, 1)
+        x = np.random.uniform(0, 1, BATCH_SIZE)
+        x = x.reshape(BATCH_SIZE, 1)
         return x
 
     def GetOutput(self, x):
         y = np.linspace(-1, 1, 100)
         y = np.power(y, 2)
-        y = y.reshape(1, -1).repeat(self.BatchSize, axis=0)
+        y = y.reshape(1, -1).repeat(BATCH_SIZE, axis=0)
         y = y * x
         return y
 

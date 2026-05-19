@@ -9,8 +9,8 @@ class Model(nn.Module):
     def __init__(
         self,
         feature_dim,
+        embedding_dim,
         hidden_dim,
-        latent_dim,
         dropout=Defaults.Dropout,
         activation=Defaults.Activation,
     ):
@@ -19,16 +19,16 @@ class Model(nn.Module):
         self.Statistics = RunningStatistics(feature_dim)
 
         self.Encoder = LinearBlock(
-            feature_dim, hidden_dim, latent_dim, dropout, activation
+            feature_dim, embedding_dim, hidden_dim, dropout, activation
         )
         self.Decoder = LinearBlock(
-            latent_dim, hidden_dim, feature_dim, dropout, activation
+            embedding_dim, feature_dim, hidden_dim, dropout, activation
         )
 
     def feature_dim(self):
         return self.Encoder.L1.InputSize
 
-    def latent_dim(self):
+    def embedding_dim(self):
         return self.Decoder.L1.InputSize
 
     def forward(self, x):
@@ -43,10 +43,10 @@ class Model(nn.Module):
             self.Statistics.Update(features)
 
         features = self.Statistics.Normalize(features)
-        latent = self.Encoder(features)
-        prediction = self.Decoder(latent)
+        embedding = self.Encoder(features)
+        prediction = self.Decoder(embedding)
 
         loss = Losses.MSE(prediction, features)
 
         reconstruction = self.Statistics.Denormalize(prediction)
-        return {"Y": reconstruction, "Z": latent}, {"MSE Loss": loss}
+        return {"Y": reconstruction, "Z": embedding}, {"MSE Loss": loss}

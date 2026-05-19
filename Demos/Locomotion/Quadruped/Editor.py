@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ai4animation import (
     AI4Animation,
+    AssetManager,
     ContactModule,
     Dataset,
     GuidanceModule,
@@ -13,7 +14,6 @@ from ai4animation import (
     MotionModule,
     RootModule,
     Vector3,
-    AssetManager
 )
 
 SCRIPT_DIR = Path(__file__).parent

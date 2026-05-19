@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Rotation representations and conversions between matrices, quaternions, and angle-axis."""
+
 from ai4animation.Math import Quaternion, Tensor, Transform
 
 
@@ -44,7 +46,7 @@ def RotationY(angle):
     c = Tensor.Cos(Tensor.Deg2Rad(angle))
     s = Tensor.Sin(Tensor.Deg2Rad(angle))
     r = Tensor.Repeat(
-        Tensor.Eye(3).reshape(-1, 3, 3), Tensor.TensorCapacity(angle), 0
+        Tensor.Eye(3, Tensor.GetBackend(angle)).reshape(-1, 3, 3), Tensor.TensorCapacity(angle), 0
     ).reshape(list(angle.shape) + [3, 3])
     r[..., 0, 0] = c
     r[..., 2, 2] = c

@@ -6,6 +6,7 @@ from pathlib import Path
 import torch
 from ai4animation import (
     AI4Animation,
+    CosineAnnealingOptimizer,
     DataSampler,
     Dataset,
     FeedTensor,
@@ -71,18 +72,23 @@ class Program:
 
         self.Network = Tensor.ToDevice(
             MultiLayerPerceptron.Model(
-                input_dim=INPUT_DIM, output_dim=OUTPUT_DIM, hidden_dim=1024
+                input_dim=INPUT_DIM,
+                output_dim=OUTPUT_DIM,
+                hidden_dim=1024,
             )
         )
 
-        self.Optimizer = Utility.CosineAnnealingOptimizer(
+        self.Optimizer = CosineAnnealingOptimizer(
             self.Network.parameters(),
             self.DataSampler.BatchSize,
-            self.DataSampler.SampleCount,
+            self.DataSampler.BatchCount,
         )
 
         self.LossHistory = Plotting.LossHistory(
-            "Loss History", drawInterval=DRAW_INTERVAL, yScale="log"
+            "Loss History",
+            self.DataSampler.BatchCount,
+            drawInterval=DRAW_INTERVAL,
+            yScale="log",
         )
 
         self.FutureSeries = TimeSeries(start=0.0, end=0.5, samples=FUTURE_SAMPLES)
@@ -91,7 +97,7 @@ class Program:
         self.Trainer = self.Training()
 
     def Standalone(self):
-        self.Editor = AI4Animation.Scene.AddEntity("Trainer").AddComponent(
+        self.Editor = AI4Animation.Scene.AddEntity("Editor").AddComponent(
             MotionEditor,
             self.Dataset,
             os.path.join(ASSETS_PATH, "Model.glb"),
@@ -117,9 +123,8 @@ class Program:
                 epoch, EPOCH_COUNT
             ):
                 _, loss = self.Network.learn(xBatch, yBatch, epoch == 1)
-                self.Optimizer.Update(yBatch.shape[0], loss["MSE Loss"])
-                for k, v in loss.items():
-                    self.LossHistory.Add((Plotting.ToNumpy(v), k))
+                self.Optimizer.Update(loss)
+                self.LossHistory.Add(loss)
                 yield
             self.LossHistory.Print()
 
@@ -130,21 +135,24 @@ class Program:
         inputs = FeedTensor("X", (len(timestamps), INPUT_DIM))
         outputs = FeedTensor("Y", (len(timestamps), OUTPUT_DIM))
 
-        # root = motion.GetModule(RootModule).GetRootTransformations(timestamps, mirrored=mirrored)
-        root = Tensor.Inverse(
-            motion.GetModule(RootModule).GetTransforms(timestamps, mirrored=mirrored)
+        window = Tensor.RandomUniform(min=0.0, max=1.0)
+        smoothing = TimeSeries(-window / 2, window / 2, 10)
+        rootInv = Tensor.Inverse(
+            motion.GetModule(RootModule).GetTransforms(
+                timestamps, mirrored=mirrored, smoothing=smoothing
+            )
         )
 
         # Inputs
         # transforms = Transform.TransformationTo(
         transforms = Transform.TransformationFrom(
             motion.GetBoneTransformations(timestamps, BONES, mirrored=mirrored),
-            root.reshape(-1, 1, 4, 4),
+            rootInv.reshape(-1, 1, 4, 4),
         )
         # velocities = Vector3.DirectionTo(
         velocities = Vector3.DirectionFrom(
             motion.GetBoneVelocities(timestamps, BONES, mirrored=mirrored),
-            root.reshape(-1, 1, 4, 4),
+            rootInv.reshape(-1, 1, 4, 4),
         )
         inputs.Feed(Transform.GetPosition(transforms))
         inputs.Feed(Transform.GetAxisZ(transforms))
@@ -157,7 +165,7 @@ class Program:
             motion.GetModule(RootModule).GetTransforms(
                 self.FutureSeries.SimulateTimestamps(timestamps), mirrored
             ),
-            root.reshape(-1, 1, 4, 4),
+            rootInv.reshape(-1, 1, 4, 4),
         )
         # futureMotion = Transform.TransformationTo(
         futureMotion = Transform.TransformationFrom(
@@ -166,7 +174,7 @@ class Program:
                 mirrored,
                 BONES,
             ),
-            root.reshape(-1, 1, 1, 4, 4),
+            rootInv.reshape(-1, 1, 1, 4, 4),
         )
         outputs.FeedVector3(Transform.GetPosition(futureRoot), x=True, y=False, z=True)
         outputs.FeedVector3(Transform.GetAxisZ(futureRoot), x=True, y=False, z=True)

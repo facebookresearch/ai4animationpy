@@ -12,9 +12,9 @@ class Model(nn.Module):
         input_dim,
         output_dim,
         encoder_dim,
+        decoder_dim,
         channels,
         classes,
-        decoder_dim,
         dropout=Defaults.Dropout,
         activation=Defaults.Activation,
     ):
@@ -25,10 +25,10 @@ class Model(nn.Module):
 
         self.Codebook = CodebookLayer(channels, classes)
         self.Encoder = LinearBlock(
-            input_dim, encoder_dim, self.Codebook.dimensions(), dropout, activation
+            input_dim, self.Codebook.dimensions(), encoder_dim, dropout, activation
         )
         self.Decoder = LinearBlock(
-            self.Codebook.dimensions(), decoder_dim, output_dim, dropout, activation
+            self.Codebook.dimensions(), output_dim, decoder_dim, dropout, activation
         )
 
     def input_dim(self):

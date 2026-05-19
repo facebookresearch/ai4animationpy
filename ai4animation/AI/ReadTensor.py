@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Tensor reader for incrementally consuming neural network output values."""
+
 import torch
 from ai4animation.Math import Rotation, Tensor, Transform, Vector3
 
@@ -32,6 +34,9 @@ class ReadTensor:
             return list(self.Fixed) + [shape]
         else:
             return list(self.Fixed) + list(shape)
+
+    def ReadAll(self):
+        return self.Read(self.Dims)
 
     def Read(self, shape, min=None, max=None):
         size = Tensor.ShapeCapacity(shape)
@@ -82,9 +87,9 @@ class ReadTensor:
         return Rotation.Look(z, y)
 
     def GetTensor(self):
-        if self.Pivot < self.Capacity:
+        if self.Pivot < self.Dims:
             print(
-                f"Did not feed all inputs for tensor: {self.Name} ({self.Pivot} / {self.Capacity})"
+                f"Did not feed all inputs for tensor: {self.Name} ({self.Pivot} / {self.Dims})"
             )
         return Tensor.ToDevice(
             torch.tensor(self.Data.reshape(self.Shape), dtype=torch.float32)

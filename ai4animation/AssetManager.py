@@ -1,6 +1,9 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Asset path resolver for locating project resource files."""
+
 import os
 import sys
+import types
 from pathlib import Path
 
 
@@ -8,25 +11,53 @@ class AssetManager:
     Root = None
 
     @classmethod
-    def _add_assets_to_path(cls):
-        if cls.Root is not None:
-            assets_path = str(cls.Root)
-            if assets_path not in sys.path:
-                sys.path.insert(0, assets_path)
+    def _register_assets_package(cls):
+        """Expose the Assets directory as the `ai4animation.Assets` subpackage.
 
-            # Automatically add all subdirectories in Assets to path
-            if os.path.exists(assets_path):
-                for item in os.listdir(assets_path):
-                    item_path = os.path.join(assets_path, item)
-                    # Add directories (excluding __pycache__ and hidden folders)
-                    if os.path.isdir(item_path) and not item.startswith((".", "__")):
-                        if item_path not in sys.path:
-                            sys.path.insert(0, item_path)
+        Instead of injecting asset folders into the global ``sys.path`` (which
+        pollutes the top-level namespace and makes ``import TrinityV4`` work
+        from anywhere), we attach the asset directories to the ``__path__`` of
+        a virtual ``ai4animation.Assets`` package. This makes imports such as
+        ``from ai4animation.Assets import TrinityV4`` work via the regular
+        package machinery, scoped to ``ai4animation.Assets`` only.
+        """
+        if cls.Root is None:
+            return
+
+        assets_path = str(cls.Root)
+        if not os.path.exists(assets_path):
+            return
+
+        # Collect the assets root plus its immediate subdirectories so that
+        # files nested one level deep (e.g. Definitions/TrinityV4.py) are
+        # importable as ``ai4animation.Assets.TrinityV4``.
+        paths = [assets_path]
+        for item in os.listdir(assets_path):
+            item_path = os.path.join(assets_path, item)
+            if os.path.isdir(item_path) and not item.startswith((".", "__")):
+                paths.append(item_path)
+
+        pkg_name = "ai4animation.Assets"
+        mod = sys.modules.get(pkg_name)
+        if mod is None:
+            mod = types.ModuleType(pkg_name)
+            mod.__package__ = pkg_name
+            mod.__path__ = []
+            sys.modules[pkg_name] = mod
+            parent = sys.modules.get("ai4animation")
+            if parent is not None:
+                parent.Assets = mod
+
+        existing = list(getattr(mod, "__path__", []))
+        for p in paths:
+            if p not in existing:
+                existing.append(p)
+        mod.__path__ = existing
 
     @classmethod
     def SetRoot(cls, path):
         cls.Root = Path(path).resolve()
-        cls._add_assets_to_path()
+        cls._register_assets_package()
 
     @classmethod
     def GetPath(cls, relative_path):
@@ -58,7 +89,7 @@ class AssetManager:
             # Default: AI4AnimationPy/Assets
             module_dir = Path(__file__).resolve().parent
             cls.Root = module_dir.parent / "Assets"
-            cls._add_assets_to_path()
+            cls._register_assets_package()
 
         # Try as asset name first (e.g., "v3.glb")
         asset_path = cls.Root / relative_path
@@ -77,7 +108,7 @@ class AssetManager:
                 return str(asset_path)
 
         path = str(cls.Root / relative_path)
-        if not os.path.isfile(path) or not os.path.dir(path):
+        if not os.path.isfile(path) and not os.path.isdir(path):
             raise FileNotFoundError(f"Asset path or directory not found: {path}")
         return path
 

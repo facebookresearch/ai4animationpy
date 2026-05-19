@@ -7,6 +7,8 @@ from ai4animation import Utility
 from ai4animation.AI4Animation import AI4Animation
 from ai4animation.Math import Rotation, Vector3
 
+IS_MACOS = sys.platform == "darwin"
+
 DEFAULT_WIDTH = 1920
 DEFAULT_HEIGHT = 1080
 
@@ -16,17 +18,25 @@ class Standalone:
         AI4Animation.Standalone = self
         AI4Animation.Draw = Utility.LoadModule(os.path.dirname(__file__) + "/Draw.py")
         AI4Animation.GUI = Utility.LoadModule(os.path.dirname(__file__) + "/GUI.py")
-        AI4Animation.Color = self.Color
+        AI4Animation.Color = Utility.LoadModule(
+            os.path.dirname(__file__) + "/Color.py"
+        ).Color
         rl.SetConfigFlags(rl.FLAG_MSAA_4X_HINT | rl.FLAG_WINDOW_RESIZABLE)
         rl.InitWindow(1920, 1080, Utility.ToBytes("AI4AnimationPy"))
         self.Camera = AI4Animation.Scene.AddEntity("Camera").AddComponent(
             self.LoadModule("Camera").Camera
         )
+        render_module = self.LoadModule("RenderPipeline")
+        pipeline_class = (
+            render_module.ForwardRenderPipeline
+            if IS_MACOS
+            else render_module.RenderPipeline
+        )
+        if IS_MACOS:
+            print("macOS detected: using forward rendering pipeline")
         self.RenderPipeline = AI4Animation.Scene.AddEntity(
             "RenderPipeline"
-        ).AddComponent(
-            self.LoadModule("RenderPipeline").RenderPipeline, self.Camera.Camera
-        )
+        ).AddComponent(pipeline_class, self.Camera.Camera)
 
         self.Primitives = self.LoadModule("Primitive")
 
@@ -75,6 +85,9 @@ class Standalone:
             int(coordinates[1] * self.ScreenHeight()),
         )
 
+    def SetTargetFPS(self, fps):
+        rl.SetTargetFPS(fps)
+
     def Run(self):
         while not rl.WindowShouldClose():
             AI4Animation.Update(rl.GetFrameTime())
@@ -90,20 +103,22 @@ class Standalone:
     def Update(self):
         AI4Animation.__UPDATE__()
         # Render
-        rl.rlDisableColorBlend()
+        if not IS_MACOS:
+            rl.rlDisableColorBlend()
         rl.BeginDrawing()
         self.RenderPipeline.Render(lambda: AI4Animation.__DRAW__())
         # UI
-        rl.rlEnableColorBlend()
+        if not IS_MACOS:
+            rl.rlEnableColorBlend()
         AI4Animation.Draw.Text(
-            "FPS " + str(rl.GetFPS()), 0.02, 0.97, 0.02, self.Color.BLACK
+            "FPS " + str(rl.GetFPS()), 0.02, 0.97, 0.02, AI4Animation.Color.BLACK
         )
         AI4Animation.Draw.Text(
             "Entities: " + str(len(AI4Animation.Scene.Entities)),
             0.02,
             0.95,
             0.02,
-            self.Color.BLACK,
+            AI4Animation.Color.BLACK,
         )
         AI4Animation.__GUI__()
         rl.EndDrawing()
@@ -116,16 +131,3 @@ class Standalone:
 
     def CreateSkinnedMesh(self, actor, glb):
         return self.LoadModule("SkinnedMesh").SkinnedMesh(actor, glb)
-
-    class Color:
-        BLACK = rl.colors.BLACK
-        WHITE = rl.colors.WHITE
-        RED = rl.colors.RED
-        GREEN = rl.colors.GREEN
-        BLUE = rl.colors.BLUE
-        RAYWHITE = rl.colors.RAYWHITE
-        GRAY = rl.colors.GRAY
-        LIGHTGRAY = rl.colors.LIGHTGRAY
-        SKYBLUE = rl.colors.SKYBLUE
-        ORANGE = rl.colors.ORANGE
-        MAGENTA = rl.colors.MAGENTA

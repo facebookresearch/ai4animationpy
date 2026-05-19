@@ -393,9 +393,9 @@ class LightSystem(Component):
             model=model,
             skinned_mesh=skinned_mesh,
             position=Vector3(0.0, 0.0, 0.0) if position is None else position,
-            rotationAxis=Vector3(0.0, 1.0, 0.0)
-            if rotationAxis is None
-            else rotationAxis,
+            rotationAxis=(
+                Vector3(0.0, 1.0, 0.0) if rotationAxis is None else rotationAxis
+            ),
             rotationAngle=0.0 if rotationAngle is None else rotationAngle,
             scale=Vector3(1.0, 1.0, 1.0) if scale is None else scale,
             color=color,

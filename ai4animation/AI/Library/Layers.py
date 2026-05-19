@@ -21,6 +21,12 @@ class LinearLayer(torch.nn.Module):
         self.Activation = activation
         self.Layer = nn.Linear(input_size, output_size)
 
+    def input_dim(self):
+        return self.InputSize
+
+    def output_dim(self):
+        return self.OutputSize
+
     def forward(self, z):
         z = F.dropout(z, self.Dropout, training=self.training)
         z = self.Layer(z)
@@ -53,6 +59,12 @@ class FiLMLinearLayer(torch.nn.Module):
 
         self.FiLM = FiLMLayer(input_size, film_size)
         self.Linear = LinearLayer(input_size, output_size, dropout, activation)
+
+    def input_dim(self):
+        return self.Linear.input_dim()
+
+    def output_dim(self):
+        return self.Linear.output_dim()
 
     def forward(self, z, film):
         z = self.FiLM(z, film)

@@ -29,4 +29,4 @@ These schedules could be combined with shrinking/expanding restart periods, weig
             optimizer.step()
             scheduler.batch_step()
         validate(...)
-```        
+```

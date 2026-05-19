@@ -134,6 +134,18 @@ def parse_from_accessor(accessor: Accessor, gltf: GLTF2) -> NDArray:
 
     result = np.array(all_values).reshape(accessor.count, elements_per_item)
 
+    # Honor the glTF `normalized` flag for integer accessors: dequantize back
+    # to floats in the canonical [-1, 1] or [0, 1] range per the spec.
+    if getattr(accessor, "normalized", False):
+        if component_type == ComponentType.SIGNED_BYTE:
+            result = np.maximum(result.astype(np.float32) / 127.0, -1.0)
+        elif component_type == ComponentType.UNSIGNED_BYTE:
+            result = result.astype(np.float32) / 255.0
+        elif component_type == ComponentType.SIGNED_SHORT:
+            result = np.maximum(result.astype(np.float32) / 32767.0, -1.0)
+        elif component_type == ComponentType.UNSIGNED_SHORT:
+            result = result.astype(np.float32) / 65535.0
+
     return result
 
 
@@ -352,7 +364,10 @@ class GLB(ModelImporter):
                 texcoord_i, image = parse_material(primitive, self._glb, images)
                 assert texcoord_i == -1 or texcoord_i in texcoords, texcoords
                 selected_texcoords = texcoords.get(texcoord_i)
-                if selected_texcoords is None or selected_texcoords.shape[0] != num_vertices:
+                if (
+                    selected_texcoords is None
+                    or selected_texcoords.shape[0] != num_vertices
+                ):
                     selected_texcoords = np.zeros((num_vertices, 2), dtype=np.float32)
 
                 name = mesh_obj.name or ""

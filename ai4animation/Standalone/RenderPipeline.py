@@ -118,6 +118,9 @@ def LoadShader(vertex_shader_name, fragment_shader_name):
         print(WarningMsg)
         vs = re.sub("#version.*", f"#version {OSX_GLSL_VERSION}", vs)
         fs = re.sub("#version.*", f"#version {OSX_GLSL_VERSION}", fs)
+        # precision qualifiers are required in GLSL ES but invalid in desktop GLSL 410
+        vs = re.sub(r"precision\s+(highp|mediump|lowp)\s+\w+\s*;", "", vs)
+        fs = re.sub(r"precision\s+(highp|mediump|lowp)\s+\w+\s*;", "", fs)
         return LoadShaderFromMemory(utils.ToBytes(vs), utils.ToBytes(fs))
     else:
         return LoadShaderFromFile(
@@ -1101,3 +1104,128 @@ def EndGBuffer(windowWidth, windowHeight):
 
     rlMatrixMode(RL_MODELVIEW)  # Switch back to modelview matrix
     rlLoadIdentity()  # Reset current matrix (modelview)
+
+
+# ----------------------------------------------------------------------------------
+# Forward Render Pipeline (macOS fallback — no MRT/GBuffer/SSAO/Bloom)
+# ----------------------------------------------------------------------------------
+class ForwardRenderPipeline(Component):
+    """Simple forward rendering pipeline for macOS where the deferred pipeline
+    (MRT, GBuffer, SSAO) does not work on Apple's deprecated OpenGL 4.1 Metal backend.
+    Provides directional + hemisphere ambient lighting — sufficient for visual QA."""
+
+    def Start(self, params):
+        self.Camera = params[0]
+        self.RegisteredModels = []
+        self.LoadedShaders = []
+        rlSetClipPlanes(0.01, 50.0)
+
+        self.LightDir = Vector3Normalize(Vector3(0.35, -1.0, -0.35))
+
+        shader_dir = os.path.join(utils.GetDirectory(__file__), "resources", "shaders")
+
+        def _load(name):
+            with open(os.path.join(shader_dir, name), "r") as f:
+                return f.read()
+
+        # Main forward shaders (GLSL 410)
+        self.ForwardShader = LoadShaderFromMemory(
+            utils.ToBytes(_load("forward.vs")), utils.ToBytes(_load("forward.fs"))
+        )
+        self.LoadedShaders.append(self.ForwardShader)
+
+        self.SkinnedForwardShader = LoadShaderFromMemory(
+            utils.ToBytes(_load("forwardSkinned.vs")),
+            utils.ToBytes(_load("forward.fs")),
+        )
+        self.LoadedShaders.append(self.SkinnedForwardShader)
+
+        # Shadow shader (planar projection onto Y=0, skinned models only)
+        self.SkinnedShadowShader = LoadShaderFromMemory(
+            utils.ToBytes(_load("forwardSkinnedShadow.vs")),
+            utils.ToBytes(_load("forwardShadow.fs")),
+        )
+        self.SkinnedShadowLightDirLoc = GetShaderLocation(
+            self.SkinnedShadowShader, b"lightDir"
+        )
+        self.LoadedShaders.append(self.SkinnedShadowShader)
+
+    def RegisterModel(
+        self,
+        name,
+        model,
+        skinned_mesh,
+        position=None,
+        rotationAxis=None,
+        rotationAngle=0.0,
+        scale=None,
+        color=RAYWHITE,
+    ):
+        if self.HasModel(model):
+            print(f"Model {model} is already registered, skipping")
+            return None
+
+        registered = RegisteredModel(
+            name=name,
+            model=model,
+            skinned_mesh=skinned_mesh,
+            position=Vector3(0.0, 0.0, 0.0) if position is None else position,
+            rotationAxis=(
+                Vector3(0.0, 1.0, 0.0) if rotationAxis is None else rotationAxis
+            ),
+            rotationAngle=0.0 if rotationAngle is None else rotationAngle,
+            scale=Vector3(1.0, 1.0, 1.0) if scale is None else scale,
+            color=color,
+        )
+
+        self.RegisteredModels.append(registered)
+        print(f"Registered model: {name} (skinned={skinned_mesh is not None})")
+        return registered
+
+    def UnregisterModel(self, model):
+        target = next((m for m in self.RegisteredModels if m.model == model), None)
+        if target is not None:
+            self.RegisteredModels.remove(target)
+            print(f"Unregistered model: {target.name}")
+            return True
+        print(f"Model not found for unregistration: {model}")
+
+    def HasModel(self, model):
+        return any(m.model == model for m in self.RegisteredModels)
+
+    def Render(self, debug):
+        for registered in self.RegisteredModels:
+            if registered.skinned_mesh:
+                registered.skinned_mesh.Update()
+
+        ClearBackground(BLACK)
+        BeginMode3D(self.Camera)
+
+        # Main pass — opaque geometry with forward lighting
+        for registered in self.RegisteredModels:
+            shader = (
+                self.SkinnedForwardShader
+                if registered.skinned_mesh
+                else self.ForwardShader
+            )
+            registered.Draw(shader)
+
+        # Shadow pass — project skinned models onto Y=0 ground plane
+        # lightDir uniform set once; mvp/boneMatrices are set by raylib in DrawModelEx
+        SetShaderValue(
+            self.SkinnedShadowShader,
+            self.SkinnedShadowLightDirLoc,
+            ffi.addressof(self.LightDir),
+            SHADER_UNIFORM_VEC3,
+        )
+        rlEnableColorBlend()
+        for registered in self.RegisteredModels:
+            if registered.skinned_mesh:
+                registered.Draw(self.SkinnedShadowShader)
+
+        debug()
+        EndMode3D()
+
+    def UnloadAll(self):
+        for shader in self.LoadedShaders:
+            UnloadShader(shader)

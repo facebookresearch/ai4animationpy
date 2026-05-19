@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Scene entity with hierarchical transforms, components, and parent-child relationships."""
+
 from ai4animation import AI4Animation
 from ai4animation.Math import Transform
 

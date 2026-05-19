@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Time series representation for sampling animation data at pivot-relative timestamps."""
+
 from ai4animation import Utility
 from ai4animation.Math import Tensor
 

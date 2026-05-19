@@ -7,6 +7,7 @@ import torch
 from ai4animation import (
     Actor,
     AI4Animation,
+    CosineAnnealingOptimizer,
     DataSampler,
     Dataset,
     FeedTensor,
@@ -88,21 +89,24 @@ class Program:
             )
         )
 
-        self.Optimizer = Utility.CosineAnnealingOptimizer(
+        self.Optimizer = CosineAnnealingOptimizer(
             self.Network.parameters(),
             self.DataSampler.BatchSize,
-            self.DataSampler.SampleCount,
+            self.DataSampler.BatchCount,
         )
 
         self.LossHistory = Plotting.LossHistory(
-            "Loss History", drawInterval=DRAW_INTERVAL, yScale="log"
+            "Loss History",
+            self.DataSampler.BatchCount,
+            drawInterval=DRAW_INTERVAL,
+            yScale="log",
         )
 
         self.Paused = False
         self.Trainer = self.Training()
 
     def Standalone(self):
-        self.Editor = AI4Animation.Scene.AddEntity("Trainer").AddComponent(
+        self.Editor = AI4Animation.Scene.AddEntity("Editor").AddComponent(
             MotionEditor,
             self.Dataset,
             os.path.join(ASSETS_PATH, "Model.glb"),
@@ -136,9 +140,8 @@ class Program:
                 epoch, EPOCH_COUNT
             ):
                 _, loss = self.Network.learn(xBatch, yBatch, epoch == 1)
-                self.Optimizer.Update(yBatch.shape[0], loss["MSE Loss"])
-                for k, v in loss.items():
-                    self.LossHistory.Add((Plotting.ToNumpy(v), k))
+                self.Optimizer.Update(loss)
+                self.LossHistory.Add(loss)
                 yield
             self.LossHistory.Print()
 

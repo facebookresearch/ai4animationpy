@@ -1,11 +1,13 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Dataset loader for NPZ motion capture files."""
+
 import os
 
 from ai4animation.Animation.Motion import Motion
 
 
 class Dataset:
-    def __init__(self, directory, modules, max_files=None):
+    def __init__(self, directory, modules=None, max_files=None):
         self.Directory = directory if isinstance(directory, list) else [directory]
         self.Modules = modules
         self.Pool = []
@@ -30,7 +32,8 @@ class Dataset:
 
     def LoadMotion(self, index):
         motion = Motion.LoadFromNPZ(self.Files[index])
-        motion.AddModules(self.Modules)
+        if self.Modules is not None:
+            motion.AddModules(self.Modules)
         return motion
 
     def Filter(self, id=None):

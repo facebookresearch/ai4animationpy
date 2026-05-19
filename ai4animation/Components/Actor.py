@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Skeletal actor component with bone hierarchy, transforms, and visualization."""
+
 from typing import List
 
 import numpy as np
@@ -31,14 +33,13 @@ class Actor(Component):
         if bone_names is None:
             bone_names = self.Model.JointNames
 
-        # save input params
+        # Save input params
         self.ModelPath = model_path
         self.BoneNames = bone_names
 
-        # create missing nodes on the fly
+        # Create missing nodes on the fly
         self.Bones = []
         self.NameToBoneMap = {}
-
         for i, name in enumerate(bone_names):
             entity = self.NameToEntity.get(name)
             if entity is None:
@@ -51,7 +52,7 @@ class Actor(Component):
             self.Bones.append(bone)
             self.NameToBoneMap[name] = bone
 
-        # parent-child relationships
+        # Determine Parent-Child Hierarchy
         for bone in self.Bones:
             parent_entity = bone.Entity.FindParent(bone_names)
             if parent_entity is not None:
@@ -65,9 +66,6 @@ class Actor(Component):
         self.Velocities = Vector3.Zero(self.GetBoneCount())
         for bone in self.Bones:
             bone.ComputeZeroTransform()
-
-        # Precompute
-        self.DefaultLengths = self.GetDefaultBoneLengths()
 
     def Update(self):
         pass
@@ -100,6 +98,12 @@ class Actor(Component):
 
     def GetBoneNames(self):
         return list(self.NameToBoneMap.keys())
+
+    def GetParentNames(self):
+        return [
+            bone.Parent.Entity.Name if bone.Parent is not None else None
+            for bone in self.Bones
+        ]
 
     def HasBone(self, name):
         return name in self.NameToBoneMap
@@ -173,6 +177,15 @@ class Actor(Component):
             fn_indices=lambda: op(values[args]),
         )
 
+    def GetSceneTransforms(self):
+        return AI4Animation.Scene.GetTransforms(self.Entities)
+
+    def GetSceneBoneNames(self):
+        return [entity.Name for entity in self.Entities]
+
+    def GetSceneParentNames(self):
+        return [entity.Parent.Name if entity.Parent is not self.Entity else None for entity in self.Entities]
+
     def SetTransforms(self, values, bones=None):
         Transform.SetTransform(
             self.Transforms,
@@ -184,6 +197,9 @@ class Actor(Component):
         return self.GenericTensorOperation(
             names_or_bones_or_indices, self.Transforms, Transform.GetTransform
         )
+
+    def SetPositionsAndRotations(self, positions, rotations, bones=None):
+        self.SetTransforms(Transform.TR(positions, rotations), bones)
 
     def SetPositions(self, values, bones=None):
         Transform.SetPosition(
@@ -221,6 +237,11 @@ class Actor(Component):
             names_or_bones_or_indices, self.Velocities, Vector3.GetVector
         )
 
+    def GetAlignments(self, names_or_bones_or_indices=None):
+        bones = self.GetPositions(self.GetBoneIndices(names_or_bones_or_indices))
+        parents = self.GetPositions(self.GetParentIndices(names_or_bones_or_indices))
+        return Vector3.Normalize(bones - parents)
+
     def GetRoot(self):
         return self.Root
 
@@ -241,11 +262,6 @@ class Actor(Component):
             self.Entity.SetTransform(self.Root)
         for bone in self.GetBones(bones):
             bone.Entity.SetTransform(bone.GetTransform())
-
-        # bones = self.GetBones(bones)
-        # entites = ([self.Entity] + [bone.Entity for bone in bones]) if root else [bone.Entity for bone in bones]
-        # transforms = ([self.Root] + [bone.GetTransform() for bone in bones]) if root else [bone.GetTransform() for bone in bones]
-        # AI4Animation.Scene.SetTransforms(entites, transforms)
 
     def SyncFromScene(self, bones=None, root=True):
         if root:
@@ -274,7 +290,7 @@ class Actor(Component):
         children = self.GetBoneIndices(bones)
         a = self.GetPositions(parents)
         b = self.GetPositions(children)
-        c = self.DefaultLengths[children].reshape(-1, 1)
+        c = self.GetDefaultBoneLengths()[children].reshape(-1, 1)
         d = a + c * Vector3.Normalize(b - a)
         self.SetPositions(d, children)
 
@@ -379,9 +395,25 @@ class Actor(Component):
         self.AssignZeroPose(names, transforms, self.Entity)
         return entities
 
+    def DrawHandle(self):
+        self.Entity.DrawHandle()
+
     def DrawHandles(self):
         for bone in self.Bones:
             bone.DrawHandle()
+
+    def ShowMesh(self, value):
+        if value:
+            self.SkinnedMesh.Register()
+        else:
+            if AI4Animation.Standalone.RenderPipeline.HasModel(self.SkinnedMesh.Models):
+                self.SkinnedMesh.Unregister()
+
+    def ToggleMesh(self):
+        if AI4Animation.Standalone.RenderPipeline.HasModel(self.SkinnedMesh.Models):
+            self.SkinnedMesh.Unregister()
+        else:
+            self.SkinnedMesh.Register()
 
     def Standalone(self):
         self.SkinnedMesh = AI4Animation.Standalone.CreateSkinnedMesh(self, self.Model)
@@ -393,24 +425,22 @@ class Actor(Component):
             self.Button_Velocities = None
             self.Button_Mesh = None
             self.Button_Labels = None
+            self.Button_Hierarchy = None
             return
 
         self.Canvas = AI4Animation.GUI.Canvas("Actor", 0.01, 0.3, 0.125, 0.25)
-        self.Button_Root = AI4Animation.GUI.Button(
-            "Show Root", 0.05, 0.15, 0.9, 0.125, False, True, self.Canvas
-        )
-        self.Button_Skeleton = AI4Animation.GUI.Button(
-            "Show Skeleton", 0.05, 0.3, 0.9, 0.125, False, True, self.Canvas
-        )
-        self.Button_Velocities = AI4Animation.GUI.Button(
-            "Show Velocities", 0.05, 0.45, 0.9, 0.125, False, True, self.Canvas
-        )
-        self.Button_Mesh = AI4Animation.GUI.Button(
-            "Show Mesh", 0.05, 0.6, 0.9, 0.125, True, True, self.Canvas
-        )
-        self.Button_Labels = AI4Animation.GUI.Button(
-            "Show Labels", 0.05, 0.75, 0.9, 0.125, False, True, self.Canvas
-        )
+        tuples = [
+            ("Button_Root", "Show Root"),
+            ("Button_Skeleton", "Show Skeleton"),
+            ("Button_Velocities", "Show Velocities"),
+            ("Button_Mesh", "Show Mesh"),
+            ("Button_Labels", "Show Labels"),
+            ("Button_Hierarchy", "Show Hierarchy"),
+        ]
+        item = 0
+        for button, text in tuples:
+            setattr(self, button, AI4Animation.GUI.Button(text, 0.05, 0.15 + item/(len(tuples)+1), 0.9, 0.65/len(tuples), False, True, self.Canvas))
+            item += 1
 
     def Draw(self):
         if not self.ShowGUI:
@@ -436,6 +466,8 @@ class Actor(Component):
                 boneSize,
                 Utility.Opacity(AI4Animation.Color.BLUE, 0.5),
             )
+        if self.Button_Hierarchy.Active:
+            self.Entity.DrawHierarchy()
 
     def GUI(self):
         if not self.ShowGUI:
@@ -447,6 +479,7 @@ class Actor(Component):
         self.Button_Velocities.GUI()
         self.Button_Mesh.GUI()
         self.Button_Labels.GUI()
+        self.Button_Hierarchy.GUI()
 
         if self.Button_Labels.Active:
             AI4Animation.Draw.Text3D(
@@ -454,10 +487,7 @@ class Actor(Component):
             )
 
         if self.Button_Mesh.IsPressed():
-            if AI4Animation.Standalone.RenderPipeline.HasModel(self.SkinnedMesh.Models):
-                self.SkinnedMesh.Unregister()
-            else:
-                self.SkinnedMesh.Register()
+            self.ToggleMesh()
 
     class Bone:
         def __init__(self, actor, index, entity):
@@ -529,6 +559,20 @@ class Actor(Component):
         def GetRotation(self):
             return Transform.GetRotation(self.Actor.Transforms, self.Index)
 
+        def SetLocalRotation(self, value, FK=False):
+            if self.Parent is None:
+                self.SetRotation(value, FK)
+            else:
+                global_rotation = Rotation.RotationFrom(
+                    value, self.Parent.GetTransform()
+                )
+                self.SetRotation(global_rotation, FK)
+
+        def GetLocalRotation(self):
+            if self.Parent is None:
+                return self.GetRotation()
+            return Rotation.RotationTo(self.GetRotation(), self.Parent.GetTransform())
+
         def SetVelocity(self, value):
             Vector3.SetVector(self.Actor.Velocities, value, self.Index)
 
@@ -552,6 +596,9 @@ class Actor(Component):
                     f"Warning: failed to compute zero pose for bone '{self.Entity.Name}' due to {type(e).__name__}: {e}"
                 )
                 self.ZeroTransform = Transform.Identity()
+
+        def GetZeroLocalRotation(self):
+            return Transform.GetRotation(self.ZeroTransform)
 
         def GetCurrentLength(self):
             return (

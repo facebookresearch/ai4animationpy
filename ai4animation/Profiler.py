@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Lightweight profiler for measuring per-section execution time and cProfile integration."""
+
 import cProfile
 import io
 import pstats

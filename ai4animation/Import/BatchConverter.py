@@ -10,101 +10,6 @@ from ai4animation.Animation.Motion import Motion
 from ai4animation.Math import Vector3
 from tqdm import tqdm
 
-CRANBERRY_BONE_NAMES = [
-    "b_root",
-    "b_l_upleg",
-    "b_l_leg",
-    "b_l_talocrural",
-    "b_l_subtalar",
-    "b_l_ball",
-    "b_r_upleg",
-    "b_r_leg",
-    "b_r_talocrural",
-    "b_r_subtalar",
-    "b_r_ball",
-    "b_spine0",
-    "b_spine1",
-    "b_spine2",
-    "b_spine3",
-    "b_neck0",
-    "b_head",
-    "b_l_shoulder",
-    "p_l_scap",
-    "b_l_arm",
-    "b_l_forearm",
-    "b_l_wrist_twist",
-    "b_l_wrist",
-    "b_r_shoulder",
-    "p_r_scap",
-    "b_r_arm",
-    "b_r_forearm",
-    "b_r_wrist_twist",
-    "b_r_wrist",
-]
-
-GENO_BONE_NAMES = [
-    "Hips",
-    "LeftUpLeg",
-    "LeftLeg",
-    "LeftFoot",
-    "LeftToeBase",
-    "RightUpLeg",
-    "RightLeg",
-    "RightFoot",
-    "RightToeBase",
-    "Spine",
-    "Spine1",
-    "Spine2",
-    "Spine3",
-    "Neck",
-    "Head",
-    "LeftShoulder",
-    "LeftArm",
-    "LeftForeArm",
-    "LeftHand",
-    "RightShoulder",
-    "RightArm",
-    "RightForeArm",
-    "RightHand",
-]
-
-QUADRUPED_BONE_NAMES = [
-    "Hips",
-    "Spine",
-    "Spine1",
-    "Neck",
-    "Head",
-    "HeadSite",
-    "LeftShoulder",
-    "LeftArm",
-    "LeftForeArm",
-    "LeftHand",
-    "LeftHandSite",
-    "RightShoulder",
-    "RightArm",
-    "RightForeArm",
-    "RightHand",
-    "RightHandSite",
-    "LeftUpLeg",
-    "LeftLeg",
-    "LeftFoot",
-    "LeftFootSite",
-    "RightUpLeg",
-    "RightLeg",
-    "RightFoot",
-    "RightFootSite",
-    "Tail",
-    "Tail1",
-    "Tail1Site",
-]
-
-QUADRUPED_JOINT_CORRECTIONS = {
-    "Head": Vector3.Create(90.0, 0.0, 0.0),
-    "LeftShoulder": Vector3.Create(90.0, 0.0, 0.0),
-    "RightShoulder": Vector3.Create(90.0, 0.0, 0.0),
-}
-
-
 class BatchConverter:
     """Batch processor for converting GLB, FBX, and BVH files to NPZ motion data"""
 
@@ -289,24 +194,7 @@ def main():
         "--output_dir", help="Output directory for NPZ files (default: input_dir/NPZ)"
     )
     parser.add_argument(
-        "--skeleton",
-        choices=["Cranberry", "Geno", "Quadruped"],
-        required=False,
-        help="Skeleton definition to use for bone filtering (default: Cranberry)",
-    )
-
-    parser.add_argument(
-        "--bvh_scale",
-        type=float,
-        default=0.01,
-        required=False,
-        help="Scale factor for BVH position data (e.g. 0.01 for centimeters)",
-    )
-    parser.add_argument(
-        "--bvh_mirror_axis",
-        choices=[axis.name for axis in Vector3.Axis],
-        required=False,
-        help="Optional mirror axis for BVH import handedness correction.",
+        "--definitions", help="Absolute path to a definitions file for specifying bone names"
     )
 
     args = parser.parse_args()
@@ -315,32 +203,24 @@ def main():
     output_dir = (
         args.output_dir if args.output_dir else os.path.join(args.input_dir, "NPZ")
     )
-    # os.makedirs(output_dir, exist_ok=True)
 
     # preset settings
     bone_names = None
+    if args.definitions is not None:
+        module = Utility.LoadModule(args.definitions)
+        bone_names = module.FULL_BODY_NAMES
+
     floor = None
-    bvh_joint_corrections = None
+    bvh_scale = None
     bvh_mirror_axis = None
-
-    if args.skeleton == "Cranberry":
-        bone_names = CRANBERRY_BONE_NAMES
-    elif args.skeleton == "Geno":
-        bone_names = GENO_BONE_NAMES
-    elif args.skeleton == "Quadruped":
-        bone_names = QUADRUPED_BONE_NAMES
-        bvh_mirror_axis = Vector3.Axis.XPositive
-        bvh_joint_corrections = QUADRUPED_JOINT_CORRECTIONS
-
-    if args.bvh_mirror_axis is not None:
-        bvh_mirror_axis = Vector3.Axis[args.bvh_mirror_axis]
+    bvh_joint_corrections = None
 
     Run(
         args.input_dir,
         output_dir,
         bone_names=bone_names,
         floor=floor,
-        bvh_scale=args.bvh_scale,
+        bvh_scale=bvh_scale,
         bvh_mirror_axis=bvh_mirror_axis,
         bvh_joint_corrections=bvh_joint_corrections,
     )

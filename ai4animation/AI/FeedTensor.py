@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Tensor writer for incrementally feeding input values to a neural network."""
+
 import torch
 from ai4animation.Math import Tensor
 

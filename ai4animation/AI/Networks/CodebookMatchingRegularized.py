@@ -2,7 +2,6 @@
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-
 from ai4animation.AI import Manifolds, Modules, Plotting, Stats
 
 
@@ -215,7 +214,7 @@ class Model(nn.Module):
         pred, reg = self.Decoder(code, input, timestamps)
         _, estimate = self.Estimator(input)
 
-        U = torch.rand(1).to(destination.device)
+        U = torch.rand(1, device=destination.device)
         seed = (1 - U) * destination + U * (
             source.detach() + torch.randn_like(destination)
         )
@@ -368,11 +367,13 @@ if __name__ == "__main__":
                 plotting.PlotFunctions(
                     axes[axis, k],
                     results[k].detach().flatten(start_dim=1),
-                    "Iter=" + str(k - 2) + " X=" + str(scale) + " "
-                    if k > 1
-                    else "Y True"
-                    if k == 0
-                    else "Y Rec",
+                    (
+                        "Iter=" + str(k - 2) + " X=" + str(scale) + " "
+                        if k > 1
+                        else "Y True"
+                        if k == 0
+                        else "Y Rec"
+                    ),
                     step=1,
                     yLimits=[-5, 5],
                 )

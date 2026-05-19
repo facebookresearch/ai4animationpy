@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Plotting utilities for visualizing latent spaces and training metrics."""
+
 import warnings
 
 import matplotlib.pyplot as plt
@@ -77,10 +79,10 @@ class LossHistory:
     def __init__(
         self,
         title,
+        horizon,  # None means forever
         ax=None,
         min=None,
         max=None,
-        maxHistory=1000,
         cumulativeHorizon=100,
         drawInterval=100,
         drawWait=1e-3,
@@ -91,12 +93,12 @@ class LossHistory:
             "ignore",
             message="Attempt to set non-positive ylim on a log-scaled axis will be ignored.",
         )
-        if ax is None:
+        if ax is None and drawInterval is not None:
             _, self.ax = plt.subplots(figsize=(10, 5))
         else:
             self.ax = ax
         self.Title = title
-        self.MaxHistory = maxHistory
+        self.Horizon = horizon
         self.CumulativeHorizon = cumulativeHorizon
         self.DrawInterval = drawInterval
         self.DrawWait = drawWait
@@ -110,10 +112,10 @@ class LossHistory:
     def Close(self):
         plt.close()
 
-    def Add(self, *args):  # arg->(value, label)
-        for arg in args:
-            value = arg[0]
-            label = arg[1]
+    def Add(self, dict):  # Dictionary contains tuples of (value, label)
+        for k, v in dict.items():
+            value = ToNumpy(v)
+            label = k
             if label not in self.Functions:
                 self.Functions[label] = ([], [])  # (Value, Cumulative)
             function = self.Functions[label]
@@ -123,10 +125,10 @@ class LossHistory:
             )
             function[1].append(cumulative)
 
-            if self.MaxHistory != 0:
-                while len(function[0]) > self.MaxHistory:
+            if self.Horizon != 0:
+                while len(function[0]) > self.Horizon:
                     function[0].pop(0)
-                while len(function[1]) > self.MaxHistory:
+                while len(function[1]) > self.Horizon:
                     function[1].pop(0)
 
             self.YRange[0] = (
@@ -140,10 +142,11 @@ class LossHistory:
                 else self.YRange[1]
             )
 
-        self.Counter += 1
-        if self.Counter >= self.DrawInterval:
-            self.Counter = 0
-            self.Draw()
+        if self.DrawInterval is not None:
+            self.Counter += 1
+            if self.Counter >= self.DrawInterval:
+                self.Counter = 0
+                self.Draw()
 
     def Draw(self):
         self.ax.cla()

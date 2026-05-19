@@ -8,6 +8,7 @@ from ai4animation import (
     Actor,
     AI4Animation,
     Autoencoder,
+    CosineAnnealingOptimizer,
     DataSampler,
     Dataset,
     FeedTensor,
@@ -19,6 +20,7 @@ from ai4animation import (
     RootModule,
     Rotation,
     Tensor,
+    TimeSeries,
     Transform,
     Utility,
     Vector3,
@@ -73,26 +75,28 @@ class Program:
         self.Network = Tensor.ToDevice(
             Autoencoder.Model(
                 feature_dim=FEATURE_DIM,
+                embedding_dim=LATENT_DIM,
                 hidden_dim=HIDDEN_DIM,
-                latent_dim=LATENT_DIM,
             )
         )
 
-        self.Optimizer = Utility.CosineAnnealingOptimizer(
+        self.Optimizer = CosineAnnealingOptimizer(
             self.Network.parameters(),
             self.DataSampler.BatchSize,
-            self.DataSampler.SampleCount,
+            self.DataSampler.BatchCount,
         )
 
         self.LossHistory = Plotting.LossHistory(
-            "Loss History", drawInterval=DRAW_INTERVAL, yScale="log"
+            "Loss History",
+            horizon=self.DataSampler.BatchCount,
+            drawInterval=DRAW_INTERVAL,
+            yScale="log",
         )
 
         self.Trainer = self.Training()
 
     def Standalone(self):
-        entity = AI4Animation.Scene.AddEntity("Trainer")
-        self.Editor = entity.AddComponent(
+        self.Editor = AI4Animation.Scene.AddEntity("Editor").AddComponent(
             MotionEditor,
             self.Dataset,
             os.path.join(ASSETS_PATH, "Model.glb"),
@@ -117,9 +121,8 @@ class Program:
                 epoch, EPOCH_COUNT
             ):
                 _, loss = self.Network.learn(batch, epoch == 1)
-                self.Optimizer.Update(batch.shape[0], loss["MSE Loss"])
-                for k, v in loss.items():
-                    self.LossHistory.Add((Plotting.ToNumpy(v), k))
+                self.Optimizer.Update(loss)
+                self.LossHistory.Add(loss)
                 yield
             self.LossHistory.Print()
 
@@ -129,18 +132,22 @@ class Program:
 
         inputs = FeedTensor("X", (len(timestamps), FEATURE_DIM))
 
-        root = Tensor.Inverse(
-            motion.GetModule(RootModule).GetTransforms(timestamps, mirrored=mirrored)
+        window = Tensor.RandomUniform(min=0.0, max=1.0)
+        smoothing = TimeSeries(-window / 2, window / 2, 10)
+        rootInv = Tensor.Inverse(
+            motion.GetModule(RootModule).GetTransforms(
+                timestamps, mirrored=mirrored, smoothing=smoothing
+            )
         )
 
         # Inputs
         transforms = Transform.TransformationFrom(
             motion.GetBoneTransformations(timestamps, BONES, mirrored=mirrored),
-            root.reshape(-1, 1, 4, 4),
+            rootInv.reshape(-1, 1, 4, 4),
         )
         velocities = Vector3.DirectionFrom(
             motion.GetBoneVelocities(timestamps, BONES, mirrored=mirrored),
-            root.reshape(-1, 1, 4, 4),
+            rootInv.reshape(-1, 1, 4, 4),
         )
         inputs.Feed(Transform.GetPosition(transforms))
         inputs.Feed(Transform.GetAxisZ(transforms))

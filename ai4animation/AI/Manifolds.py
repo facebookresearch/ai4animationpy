@@ -1,7 +1,8 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Differentiable discretization and manifold projection functions (Gumbel-Softmax, quantization, spherical mappings)."""
+
 import torch
 import torch.distributions as D
-import torch.nn as nn
 import torch.nn.functional as F
 
 
@@ -94,7 +95,7 @@ def categorical_discretization(z, c, d):
         .rsample()
         .reshape(z.shape)
     )
-    steps = torch.linspace(0.0, 1.0, d).to(z.device)
+    steps = torch.linspace(0.0, 1.0, d, device=z.device)
     z = torch.sum(z * steps, -1)
     z = z.reshape(shape)
     return z

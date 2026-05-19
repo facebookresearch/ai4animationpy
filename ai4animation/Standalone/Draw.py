@@ -31,6 +31,16 @@ def Sphere(position, size=0.1, resolution=6, color=BLACK):
         rl.DrawSphereEx(pos, size, resolution, resolution, color)
 
 
+# Draws a circle in 3D world space. Defaults to lying flat on the XZ plane
+# (up-facing) by rotating the default XY-plane circle 90 degrees around the X axis.
+def WireCircle(position, size=0.1, axis=(1.0, 0.0, 0.0), angle=90.0, color=BLACK):
+    if position.shape[0] == 0:
+        return
+    position_list = position.reshape(-1, 3).tolist()
+    for pos in position_list:
+        rl.DrawCircle3D(pos, size, axis, angle, color)
+
+
 def Line(start, end, color=BLACK):
     start, end = start.reshape(-1, 3), end.reshape(-1, 3)
     for start_pos, end_pos in zip(start.tolist(), end.tolist()):
@@ -83,7 +93,8 @@ def Transform(matrix, size=0.1, axisSize=0.25):
     Sphere(p + size * axisSize * z, size=0.05 * size * axisSize, color=BLUE)
 
 
-def Vector(origin, direction, size=1.0, color=BLACK):
+def Vector(origin, direction, size=0.05, color=BLACK):
+    Sphere(origin, size, color=AI4Animation.Color.BLACK)
     Cylinder(origin, origin + direction, size, 0, color=color)
 
 

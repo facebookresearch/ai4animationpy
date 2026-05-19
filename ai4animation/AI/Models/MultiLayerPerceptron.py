@@ -20,7 +20,7 @@ class Model(nn.Module):
         self.OutputStatistics = RunningStatistics(output_dim)
 
         self.Layers = LinearBlock(
-            input_dim, hidden_dim, output_dim, dropout, activation
+            input_dim, output_dim, hidden_dim, dropout, activation
         )
 
     def input_dim(self):

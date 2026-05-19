@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Quaternion creation, multiplication, and conversion utilities."""
+
 from ai4animation.Math import Tensor, Vector3
 
 
@@ -96,7 +98,10 @@ def Normalize(tensor):
 
 
 def ToMatrix(q):
-    q0, q1, q2, q3 = q[..., 3], q[..., 0], q[..., 1], q[..., 2]  # [w, x, y, z]
+    q = Normalize(q)
+
+    # Storage layout is [x, y, z, w]; unpack as (w, x, y, z).
+    q0, q1, q2, q3 = q[..., 3], q[..., 0], q[..., 1], q[..., 2]
 
     R = Tensor.Zeros(list(q.shape)[:-1] + [3, 3])
 
@@ -119,28 +124,83 @@ def ToMatrix(q):
 
 
 def FromMatrix(R):
+    """Convert rotation matrix to quaternion (x, y, z, w) using Shepperd's method.
+
+    Picks the largest of the four candidate magnitudes
+    (1 + r11 + r22 + r33), (1 + r11 - r22 - r33),
+    (1 - r11 + r22 - r33), (1 - r11 - r22 + r33)
+    as the pivot, computes that component from sqrt, and derives the remaining
+    three from off-diagonal sums/differences. This avoids the sign(0) failure
+    of the naive formulation (e.g. for 180-degree rotations) and is numerically
+    stable across the full range of valid rotation matrices.
+    """
     shape = R.shape[:-2]
     R = R.reshape(-1, 3, 3)
     r11, r12, r13 = R[..., 0, 0], R[..., 0, 1], R[..., 0, 2]
     r21, r22, r23 = R[..., 1, 0], R[..., 1, 1], R[..., 1, 2]
     r31, r32, r33 = R[..., 2, 0], R[..., 2, 1], R[..., 2, 2]
-    q0 = 0.5 * Tensor.Sqrt(Tensor.Maximum(1 + r11 + r22 + r33, 0))  # w
-    q1 = (
-        0.5
-        * Tensor.Sqrt(Tensor.Maximum(1 + r11 - r22 - r33, 0))
-        * Tensor.Sign(r32 - r23)
-    )  # x
-    q2 = (
-        0.5
-        * Tensor.Sqrt(Tensor.Maximum(1 - r11 + r22 - r33, 0))
-        * Tensor.Sign(r13 - r31)
-    )  # y
-    q3 = (
-        0.5
-        * Tensor.Sqrt(Tensor.Maximum(1 - r11 - r22 + r33, 0))
-        * Tensor.Sign(r21 - r12)
-    )  # z
-    M = Tensor.Stack((q1, q2, q3, q0), -1)
+
+    # Four candidate values (each equals 4 * component^2 for w, x, y, z resp).
+    # Their sum is always 4, so the maximum is always >= 1 for a valid rotation.
+    t0 = 1.0 + r11 + r22 + r33
+    t1 = 1.0 + r11 - r22 - r33
+    t2 = 1.0 - r11 + r22 - r33
+    t3 = 1.0 - r11 - r22 + r33
+
+    # Pivot scale s_i = 4 * pivot_component for each case. Clamp to EPS so the
+    # divisions in non-selected branches don't produce NaN/Inf.
+    s0 = Tensor.Maximum(2.0 * Tensor.Sqrt(Tensor.Maximum(t0, 0.0)), Tensor.EPS)
+    s1 = Tensor.Maximum(2.0 * Tensor.Sqrt(Tensor.Maximum(t1, 0.0)), Tensor.EPS)
+    s2 = Tensor.Maximum(2.0 * Tensor.Sqrt(Tensor.Maximum(t2, 0.0)), Tensor.EPS)
+    s3 = Tensor.Maximum(2.0 * Tensor.Sqrt(Tensor.Maximum(t3, 0.0)), Tensor.EPS)
+
+    # Case 0: w is the pivot.
+    w0 = 0.25 * s0
+    x0 = (r32 - r23) / s0
+    y0 = (r13 - r31) / s0
+    z0 = (r21 - r12) / s0
+
+    # Case 1: x is the pivot.
+    w1 = (r32 - r23) / s1
+    x1 = 0.25 * s1
+    y1 = (r12 + r21) / s1
+    z1 = (r13 + r31) / s1
+
+    # Case 2: y is the pivot.
+    w2 = (r13 - r31) / s2
+    x2 = (r12 + r21) / s2
+    y2 = 0.25 * s2
+    z2 = (r23 + r32) / s2
+
+    # Case 3: z is the pivot.
+    w3 = (r21 - r12) / s3
+    x3 = (r13 + r31) / s3
+    y3 = (r23 + r32) / s3
+    z3 = 0.25 * s3
+
+    # Select branch with maximum t (most numerically stable pivot).
+    cond01 = t0 >= t1
+    w01 = Tensor.Where(cond01, w0, w1)
+    x01 = Tensor.Where(cond01, x0, x1)
+    y01 = Tensor.Where(cond01, y0, y1)
+    z01 = Tensor.Where(cond01, z0, z1)
+    t01 = Tensor.Where(cond01, t0, t1)
+
+    cond23 = t2 >= t3
+    w23 = Tensor.Where(cond23, w2, w3)
+    x23 = Tensor.Where(cond23, x2, x3)
+    y23 = Tensor.Where(cond23, y2, y3)
+    z23 = Tensor.Where(cond23, z2, z3)
+    t23 = Tensor.Where(cond23, t2, t3)
+
+    cond = t01 >= t23
+    w = Tensor.Where(cond, w01, w23)
+    x = Tensor.Where(cond, x01, x23)
+    y = Tensor.Where(cond, y01, y23)
+    z = Tensor.Where(cond, z01, z23)
+
+    # Storage layout is [x, y, z, w].
+    M = Tensor.Stack((x, y, z, w), -1)
     M = M.reshape(list(shape) + [4])
     return M
 

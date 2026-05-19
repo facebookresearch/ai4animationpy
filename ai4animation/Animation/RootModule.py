@@ -14,6 +14,10 @@ class RootModule(Module):
         BIPED = "biped"
         QUADRUPED = "quadruped"
 
+    class Reference(Enum):
+        GROUND = "ground"
+        CENTER = "center"
+
     def __init__(
         self,
         motion: Motion,
@@ -24,14 +28,17 @@ class RootModule(Module):
         right_shoulder,
         neck,
         topology=Topology.BIPED,
+        reference=Reference.GROUND,
     ) -> None:
         super().__init__(motion)
 
-        self.Topology = (
+        self.RootTopology = (
             topology
             if isinstance(topology, RootModule.Topology)
             else RootModule.Topology(str(topology).lower())
         )
+
+        self.RootReference = reference
 
         self.BoneIndices = motion.GetBoneIndices(
             [hip, left_hip, right_hip, left_shoulder, right_shoulder, neck]
@@ -67,7 +74,12 @@ class RootModule(Module):
         )
         return instance
 
-    def GetTransforms(self, timestamps, mirrored: bool, smoothing: TimeSeries = None):
+    def GetTransforms(
+        self,
+        timestamps,
+        mirrored: bool,
+        smoothing: TimeSeries = None,
+    ):
         if smoothing is not None and smoothing.Window > 0.0:
             timestamps = Tensor.Unsqueeze(timestamps, -1) + smoothing.Timestamps
             axis = len(timestamps.shape) - 1
@@ -79,11 +91,11 @@ class RootModule(Module):
 
             center = positions[..., int((smoothing.SampleCount - 1) / 2), :]
             positions = (
-                Tensor.Squeeze(
-                    Tensor.Gaussian(
-                        positions - Tensor.Unsqueeze(center, axis), power=2.0, axis=axis
-                    ),
-                    axis,
+                Tensor.Gaussian(
+                    positions - Tensor.Unsqueeze(center, axis),
+                    power=2.0,
+                    axis=axis,
+                    keepDim=False,
                 )
                 + center
             )
@@ -93,9 +105,10 @@ class RootModule(Module):
                 directions[..., 1:, :],
                 Vector3.Create(0, 1, 0),
             ) / (timestamps[..., 1:] - timestamps[..., 0:-1])
-            powers = Tensor.Deg2Rad(Tensor.Abs(Tensor.Sum(angles, -1)))
-            directions = Tensor.Squeeze(
-                Tensor.Gaussian(directions, power=powers, axis=axis), axis
+            power = Tensor.Deg2Rad(Tensor.Abs(Tensor.Sum(angles, -1)))
+            power = Tensor.Unsqueeze(power, -1)
+            directions = Tensor.Gaussian(
+                directions, power=power, axis=axis, keepDim=False
             )
 
             matrices = Transform.TR(positions, Rotation.LookPlanar(directions))
@@ -111,17 +124,32 @@ class RootModule(Module):
                 matrices = Transform.Scale(matrices, self.Motion.Scale)
             return matrices
 
-    def GetPositions(self, timestamps, mirrored: bool, smoothing: TimeSeries = None):
+    def GetPositions(
+        self,
+        timestamps,
+        mirrored: bool,
+        smoothing: TimeSeries = None,
+    ):
         return Transform.GetPosition(
             self.GetTransforms(timestamps, mirrored, smoothing)
         )
 
-    def GetRotations(self, timestamps, mirrored: bool, smoothing: TimeSeries = None):
+    def GetRotations(
+        self,
+        timestamps,
+        mirrored: bool,
+        smoothing: TimeSeries = None,
+    ):
         return Transform.GetRotation(
             self.GetTransforms(timestamps, mirrored, smoothing)
         )
 
-    def GetVelocities(self, timestamps, mirrored: bool, smoothing: TimeSeries = None):
+    def GetVelocities(
+        self,
+        timestamps,
+        mirrored: bool,
+        smoothing: TimeSeries = None,
+    ):
         t_previous = Tensor.Clamp(
             timestamps - self.Motion.DeltaTime,
             0.0,
@@ -153,21 +181,35 @@ class RootModule(Module):
         delta = Transform.TransformationTo(next, prev)
         return delta
 
+    # Returns (dX, dTheta, dZ) if planar=True
+    # Returns (dX, dY, dZ, dTheta) if planar=False
     def GetDeltaVectors(
         self,
         timestamps=None,
         mirrored=False,
         deltaTime=None,
         smoothing: TimeSeries = None,
+        planar=True,
     ):
-        delta = self.GetDeltaTransforms(timestamps, mirrored, deltaTime, smoothing)
-        pos = Transform.GetPosition(delta)
-        rot = Transform.GetRotation(delta)
-        x = pos[..., 0]
-        z = pos[..., 2]
-        y = Vector3.SignedAngle(Vector3.Z, Rotation.GetAxisZ(rot), Vector3.Y)
-        vec = Tensor.Stack((x, y, z), -1)
-        return vec
+        if planar:
+            delta = self.GetDeltaTransforms(timestamps, mirrored, deltaTime, smoothing)
+            pos = Transform.GetPosition(delta)
+            rot = Transform.GetRotation(delta)
+            x = pos[..., 0]
+            z = pos[..., 2]
+            y = Vector3.SignedAngle(Vector3.Z, Rotation.GetAxisZ(rot), Vector3.Y)
+            vec = Tensor.Stack((x, y, z), -1)
+            return vec
+        else:
+            delta = self.GetDeltaTransforms(timestamps, mirrored, deltaTime, smoothing)
+            pos = Transform.GetPosition(delta)
+            rot = Transform.GetRotation(delta)
+            x = pos[..., 0]
+            y = pos[..., 1]
+            z = pos[..., 2]
+            w = Vector3.SignedAngle(Vector3.Z, Rotation.GetAxisZ(rot), Vector3.Y)
+            vec = Tensor.Stack((x, y, z, w), -1)
+            return vec
 
     def Compute(self, mirrored):
         bone_transformations = self.Motion.GetBoneTransformations(
@@ -182,18 +224,21 @@ class RootModule(Module):
         neck_pos = bone_positions[..., 5, :]
 
         # root positions
-        root_positions = Tensor.ZerosLike(hip_pos)
-        root_positions[..., 0] = hip_pos[..., 0]
-        root_positions[..., 1] = 0.0
-        root_positions[..., 2] = hip_pos[..., 2]
+        if self.RootReference == RootModule.Reference.GROUND:
+            root_positions = Tensor.ZerosLike(hip_pos)
+            root_positions[..., 0] = hip_pos[..., 0]
+            root_positions[..., 1] = 0.0
+            root_positions[..., 2] = hip_pos[..., 2]
+        if self.RootReference == RootModule.Reference.CENTER:
+            root_positions = hip_pos
 
         # root rotations
         up_batch = Tensor.ZerosLike(hip_pos)
         up_batch[..., 1] = 1.0
 
-        if self.Topology == RootModule.Topology.QUADRUPED:
+        if self.RootTopology == RootModule.Topology.QUADRUPED:
             forward_batch = neck_pos - hip_pos
-        else:
+        if self.RootTopology == RootModule.Topology.BIPED:
             hip_batch = left_hip_pos - right_hip_pos
             shoulder_batch = left_shoulder_pos - right_shoulder_pos
 
@@ -225,22 +270,34 @@ class RootModule(Module):
 
     def Standalone(self):
         self.Button_Smooth = AI4Animation.GUI.Button(
-            "Smoothed", 0.45, 0.25, 0.1, 0.05, False, True
+            "Smooth", 0.4, 0.2, 0.2, 0.05, False, True
+        )
+        self.Slider_Window = AI4Animation.GUI.Slider(
+            0.4, 0.25, 0.2, 0.05, 1.0, 0.0, 2.0, label="Window"
         )
 
     def GUI(self, editor):
         if Module.Visualize[RootModule]:
             self.Button_Smooth.GUI()
+            self.Slider_Window.GUI()
 
     def Draw(self, editor):
         if Module.Visualize[RootModule]:
+            window = self.Slider_Window.GetValue()
+            smoothing = (
+                TimeSeries(
+                    -window / 2,
+                    window / 2,
+                    editor.TimeSeries.SampleCount,
+                )
+                if self.Button_Smooth.Active
+                else None
+            )
             self.ComputeSeries(
                 editor.Timestamp,
                 editor.Mirror,
                 editor.TimeSeries,
-                TimeSeries(-1.0, 1.0, editor.TimeSeries.SampleCount)
-                if self.Button_Smooth.Active
-                else None,
+                smoothing,
             ).Draw()
 
     class Series(TimeSeries):
@@ -324,6 +381,17 @@ class RootModule(Module):
             next = Transform.GetPosition(self.Transforms)[..., 1:, :]
             length = Tensor.Sum(Tensor.Norm(next - prev, keepDim=False))
             return length
+
+        def ClampDistance(self, pivot, distance):
+            for index in range(self.SampleCount):
+                offset = self.GetPosition(index) - pivot
+                horizontal = Vector3.Create(offset[0], 0, offset[2])
+                if Vector3.Length(horizontal) > distance:
+                    horizontal = distance * Vector3.Normalize(horizontal)
+                    self.SetPosition(
+                        pivot + Vector3.Create(horizontal[0], offset[1], horizontal[2]),
+                        index,
+                    )
 
         def Control(
             self,

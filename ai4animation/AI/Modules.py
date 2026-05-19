@@ -1,4 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Reusable neural network building blocks: encoders, feature pools, and activation layers."""
+
 import numpy as np
 import torch
 import torch.nn as nn

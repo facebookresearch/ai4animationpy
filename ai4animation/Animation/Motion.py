@@ -1,9 +1,10 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Motion data container with bone transforms, velocities, and module support."""
+
 import os
 
 import numpy as np
-from ai4animation import Utility
-from ai4animation.Math import Quaternion, Rotation, Tensor, Transform, Vector3
+from ai4animation.Math import Quaternion, Tensor, Transform, Vector3
 
 
 class Motion:
@@ -39,9 +40,17 @@ class Motion:
     def TotalTime(self) -> float:
         return (self.NumFrames - 1) / self.Framerate
 
+    def AddModule(self, module):
+        if callable(module):
+            module = module(self)
+        self.Modules.append(module)
+        self.Modules[-1].Initialize()
+
     def AddModules(self, modules):
         for module in modules:
-            self.Modules.append(module(self))
+            if callable(module):
+                module = module(self)
+            self.Modules.append(module)
         for module in self.Modules:
             module.Initialize()
 
@@ -181,56 +190,11 @@ class Motion:
 
         bone_indices = self.GetBoneIndices(bone_names_or_indices)
         parent_indices = self.GetBoneIndices(parent_names_or_indices)
-        bone_indices.remove(0)
-        parent_indices.remove(-1)
+        parent_indices = [0 if x == -1 else x for x in parent_indices]
         bone_positions = self.GetBonePositions(timestamps, bone_indices, mirrored)
         parent_positions = self.GetBonePositions(timestamps, parent_indices, mirrored)
         bone_lengths = Vector3.Distance(bone_positions, parent_positions)
         return bone_lengths
-
-    def GetAveragedBoneLengths(
-        self,
-        timestamps=None,
-        bone_names_or_indices=None,
-        parent_names_or_indices=None,
-        mirrored=False,
-    ):
-        if timestamps is None:
-            timestamps = Tensor.LinSpace(0, self.TotalTime, self.NumFrames)
-
-        if bone_names_or_indices is None:
-            bone_names_or_indices = self.Hierarchy.BoneNames
-
-        if parent_names_or_indices is None:
-            parent_names_or_indices = self.Hierarchy.ParentNames
-
-        frame_indices = self.GetFrameIndices(timestamps)
-        bone_indices = self.GetBoneIndices(bone_names_or_indices)
-        parent_indices = self.GetBoneIndices(parent_names_or_indices)
-        bone_names = self.Hierarchy.GetBoneName(bone_indices)
-
-        if len(frame_indices) == 0 or len(bone_indices) == 0:
-            return [], Tensor.Zeros(0)
-
-        timestamps = Tensor.Create(timestamps)
-        bone_positions = self.GetBonePositions(timestamps, bone_indices, mirrored)
-        parent_positions = self.GetBonePositions(timestamps, parent_indices, mirrored)
-
-        if bone_positions is None or parent_positions is None:
-            return bone_names, Tensor.Zeros(len(bone_indices))
-
-        num_frames = len(frame_indices)
-        num_bones = len(bone_indices)
-
-        bone_lengths = Tensor.Zeros(num_frames, num_bones)
-        for i in range(num_bones):
-            if parent_indices[i] != -1 and bone_indices[i] != -1:
-                parent_pos = parent_positions[:, i, :]  # [num_frames, 3]
-                bone_pos = bone_positions[:, i, :]
-                distances = Vector3.Distance(parent_pos, bone_pos)
-                bone_lengths[:, i] = Tensor.Flatten(distances)
-
-        return bone_names, Tensor.Mean(bone_lengths, axis=0)
 
     def Debug(self):
         print(f"=== Motion: {self.Name} ===")
@@ -264,6 +228,29 @@ class Motion:
             bone_names=self.Hierarchy.BoneNames,
             parent_names=self.Hierarchy.ParentNames,
             parent_indices=self.Hierarchy.ParentIndices,
+        )
+
+    def SaveToGLB(self, absolute_path):
+        from ai4animation.Export.GLBExporter import GLBExporter
+
+        directory = os.path.dirname(absolute_path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+
+        frames = self.GetBoneTransformations()
+        return GLBExporter.Export(
+            positions=Transform.GetPosition(
+                frames
+            ),  # (F, J, 3) float32, world joint positions
+            rotations=Quaternion.FromMatrix(
+                Transform.GetRotation(frames)
+            ),  # (F, J, 4) float32, world quaternions (x, y, z, w)
+            bone_names=self.Hierarchy.BoneNames,  # (J,) str, joint names
+            parent_indices=np.array(
+                self.Hierarchy.ParentIndices
+            ),  # (J,) ints, parent index per joint, -1 for root
+            out_path=absolute_path,
+            fps=self.Framerate,
         )
 
     @classmethod
@@ -381,8 +368,10 @@ class Hierarchy:
         return self.IsValidBoneIndex(index) and self.ParentIndices[index] == -1
 
     def Debug(self):
-        print(f"=== Hierarchy ===")
+        print("=== Hierarchy ===")
         print(f"Bones: {len(self.BoneNames)}")
         for i, name in enumerate(self.BoneNames):
             parent = self.ParentNames[i] if self.ParentNames[i] is not None else "None"
-            print(f"  [{i}] {name} (parent: {parent})")
+            print(
+                f"  [{i}] {name} (parent: {parent}) (parent_idx: {self.ParentIndices[i]})"
+            )

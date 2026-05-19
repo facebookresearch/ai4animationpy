@@ -1,36 +1,11 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+"""4x4 homogeneous transformation matrix operations."""
+
 from ai4animation.Math import Rotation, Tensor, Vector3
 
 
-def Identity(shape=None):
-    return Tensor.Shapify(Tensor.Eye(4), shape)
-
-
-def TR(translation, rotation):
-    tShape = translation.shape[:-1]
-    # rShape = rotation.shape[:-2]
-    # if tShape != rShape:
-    #     print("Batch shapes for translation and rotation do not match:", tShape, rShape)
-    tensor = Identity(tShape)
-    tensor[..., :3, 3] = translation
-    tensor[..., :3, :3] = rotation
-    return tensor
-
-
-def TRS(translation, rotation, scale):
-    tShape = translation.shape[:-1]
-    # rShape = rotation.shape[:-2]
-    # if tShape != rShape:
-    #     print("Batch shapes for translation and rotation do not match:", tShape, rShape)
-    tensor = Identity(tShape)
-    tensor[..., :3, 3] = translation
-    tensor[..., :3, :3] = rotation
-
-    tensor[..., :3, 0] *= scale[..., 0:1]
-    tensor[..., :3, 1] *= scale[..., 1:2]
-    tensor[..., :3, 2] *= scale[..., 2:3]
-
-    return tensor
+def Identity(shape=None, backend=None):
+    return Tensor.Shapify(Tensor.Eye(4, backend), shape)
 
 
 def T(translation):
@@ -53,6 +28,35 @@ def S(scale):
     return tensor
 
 
+def TR(translation, rotation):
+    # TODO: check matching types
+    tShape = translation.shape[:-1]
+    tBackend = Tensor.GetBackend(translation)
+    # rShape = rotation.shape[:-2]
+    # if tShape != rShape:
+    #     print("Batch shapes for translation and rotation do not match:", tShape, rShape)
+    tensor = Identity(tShape, tBackend)
+    tensor[..., :3, 3] = translation
+    tensor[..., :3, :3] = rotation
+    return tensor
+
+
+def TRS(translation, rotation, scale):
+    tShape = translation.shape[:-1]
+    # rShape = rotation.shape[:-2]
+    # if tShape != rShape:
+    #     print("Batch shapes for translation and rotation do not match:", tShape, rShape)
+    tensor = Identity(tShape)
+    tensor[..., :3, 3] = translation
+    tensor[..., :3, :3] = rotation
+
+    tensor[..., :3, 0] *= scale[..., 0:1]
+    tensor[..., :3, 1] *= scale[..., 1:2]
+    tensor[..., :3, 2] *= scale[..., 2:3]
+
+    return tensor
+
+
 def TXYZ(t, x, y, z):
     values = Identity(t.shape[:-1])
     values[..., :3, 3] = t
@@ -66,6 +70,12 @@ def DeltaXZ(delta):
     pos = Tensor.Copy(delta)
     pos[..., 1] = 0
     return TR(pos, Rotation.RotationY(delta[..., 1]))
+
+
+def DeltaXYZW(delta):
+    pos = delta[..., :3]
+    deg = delta[..., 3]
+    return TR(pos, Rotation.RotationY(deg))
 
 
 def SetTransform(tensor, value, index=None):
@@ -165,6 +175,11 @@ def Interpolate(a, b, weight):
     m = Tensor.Interpolate(a, b, weight)
     SetRotation(m, Rotation.Normalize(GetRotation(m)))
     return m
+
+
+def Normalize(tensor):
+    SetRotation(tensor, Rotation.Normalize(GetRotation(tensor)))
+    return tensor
 
 
 def GetMirror(tensor, axis):

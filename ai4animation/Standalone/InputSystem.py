@@ -1,4 +1,8 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+import glob
+import os
+import struct
+import sys
 from pathlib import Path
 
 import pyray as pr
@@ -6,10 +10,6 @@ import raylib as rl
 from ai4animation import AI4Animation, Utility
 from ai4animation.Math import Rotation, Vector3
 
-# NOTE: Gamepad name ID depends on drivers and OS
-XBOX_ALIAS_1 = "xbox"
-XBOX_ALIAS_2 = "x-box"
-PS_ALIAS = "playstation"
 THIS_DIR = Path(__file__).resolve().parent
 
 CONTROLLER_TEXTURE = pr.load_texture(str(THIS_DIR / "resources/xbox.png"))
@@ -18,70 +18,182 @@ TRIGGER_DEADZONE = -0.9
 TRIGGER_PRESSED_THRESHOLD = -0.5
 CONTROLLER_ID = 0
 
+# Linux joydev axis indices (Xbox layout)
+_JS_LEFT_X = 0
+_JS_LEFT_Y = 1
+_JS_RIGHT_X = 3
+_JS_RIGHT_Y = 4
+_JS_LEFT_TRIGGER = 2
+_JS_RIGHT_TRIGGER = 5
+
+# Linux joydev button indices (Xbox layout)
+_JS_BTN_LEFT_THUMB = 9
+_JS_BTN_RIGHT_THUMB = 10
+
+_JS_EVENT_SIZE = 8  # struct js_event: u32 time, s16 value, u8 type, u8 number
+_GAMEPAD_ALIASES = ("xbox", "x-box", "playstation")
+
+
+class _JoydevReader:
+    """Reads gamepad input directly from Linux joydev (/dev/input/js*).
+
+    GLFW (used by raylib) fails to read Xbox Series controllers on some
+    Linux systems despite detecting them. This bypasses GLFW entirely.
+    """
+
+    def __init__(self):
+        self.fd = None
+        self.axes = {}
+        self.buttons = {}
+        self._open()
+
+    def _open(self):
+        for jsdir in sorted(glob.glob("/sys/class/input/js*")):
+            name_file = os.path.join(jsdir, "device", "name")
+            try:
+                with open(name_file) as f:
+                    name = f.read().strip()
+                if any(a in name.lower() for a in _GAMEPAD_ALIASES):
+                    jsnum = os.path.basename(jsdir)
+                    path = f"/dev/input/{jsnum}"
+                    self.fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+                    print(f"[InputSystem] Opened joydev: {path} ({name})")
+                    return
+            except (FileNotFoundError, PermissionError):
+                continue
+        print("[InputSystem] No gamepad found via joydev, using keyboard fallback")
+
+    @property
+    def available(self):
+        return self.fd is not None
+
+    def poll(self):
+        """Drain all pending joydev events. Call once per frame."""
+        if self.fd is None:
+            return
+        while True:
+            try:
+                data = os.read(self.fd, _JS_EVENT_SIZE)
+                _ts, value, etype, number = struct.unpack("IhBB", data)
+                if etype & 0x02:  # axis (including INIT+AXIS)
+                    self.axes[number] = value / 32767.0
+                elif etype & 0x01:  # button (including INIT+BUTTON)
+                    self.buttons[number] = bool(value)
+            except BlockingIOError:
+                break
+
+    def get_axis(self, index):
+        return self.axes.get(index, 0.0)
+
+    def get_button(self, index):
+        return self.buttons.get(index, False)
+
+    def close(self):
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
+
+
+_joydev = _JoydevReader() if sys.platform == "linux" else None
+
 
 def GamepadAvailable() -> bool:
-    return rl.IsGamepadAvailable(CONTROLLER_ID)
+    if _joydev is not None:
+        return _joydev.available
+    return rl.IsGamepadAvailable(0)
 
 
-def LogErrorIfGamepadNotAvailable():
-    if not GamepadAvailable():
-        print(f"Error: Gamepad {CONTROLLER_ID} not available")
+def _poll():
+    if _joydev is not None:
+        _joydev.poll()
+
+
+def _apply_deadzone(value, deadzone=STICK_DEADZONE):
+    return 0.0 if -deadzone < value < deadzone else value
 
 
 def GetLeftStick():
-    LogErrorIfGamepadNotAvailable()
-    x = pr.get_gamepad_axis_movement(CONTROLLER_ID, pr.GamepadAxis.GAMEPAD_AXIS_LEFT_X)
-    y = pr.get_gamepad_axis_movement(CONTROLLER_ID, pr.GamepadAxis.GAMEPAD_AXIS_LEFT_Y)
-    if -STICK_DEADZONE < x < STICK_DEADZONE:
-        x = 0.0
-    if -STICK_DEADZONE < y < STICK_DEADZONE:
-        y = 0.0
+    _poll()
+    if not GamepadAvailable():
+        wasd = GetWASDQE()
+        return (wasd[0], wasd[2])
+    if _joydev is not None and _joydev.available:
+        x = _apply_deadzone(_joydev.get_axis(_JS_LEFT_X))
+        y = _apply_deadzone(_joydev.get_axis(_JS_LEFT_Y))
+        return (x, -y)
+    x = pr.get_gamepad_axis_movement(0, pr.GamepadAxis.GAMEPAD_AXIS_LEFT_X)
+    y = pr.get_gamepad_axis_movement(0, pr.GamepadAxis.GAMEPAD_AXIS_LEFT_Y)
+    x = _apply_deadzone(x)
+    y = _apply_deadzone(y)
     return (x, -y)
 
 
 def GetRightStick():
-    LogErrorIfGamepadNotAvailable()
-    x = pr.get_gamepad_axis_movement(CONTROLLER_ID, pr.GamepadAxis.GAMEPAD_AXIS_RIGHT_X)
-    y = pr.get_gamepad_axis_movement(CONTROLLER_ID, pr.GamepadAxis.GAMEPAD_AXIS_RIGHT_Y)
-    if -STICK_DEADZONE < x < STICK_DEADZONE:
-        x = 0.0
-    if -STICK_DEADZONE < y < STICK_DEADZONE:
-        y = 0.0
+    _poll()
+    if not GamepadAvailable():
+        x = float(rl.IsKeyDown(rl.KEY_RIGHT)) - float(rl.IsKeyDown(rl.KEY_LEFT))
+        y = float(rl.IsKeyDown(rl.KEY_UP)) - float(rl.IsKeyDown(rl.KEY_DOWN))
+        return (x, y)
+    if _joydev is not None and _joydev.available:
+        x = _apply_deadzone(_joydev.get_axis(_JS_RIGHT_X))
+        y = _apply_deadzone(_joydev.get_axis(_JS_RIGHT_Y))
+        return (x, -y)
+    x = pr.get_gamepad_axis_movement(0, pr.GamepadAxis.GAMEPAD_AXIS_RIGHT_X)
+    y = pr.get_gamepad_axis_movement(0, pr.GamepadAxis.GAMEPAD_AXIS_RIGHT_Y)
+    x = _apply_deadzone(x)
+    y = _apply_deadzone(y)
     return (x, -y)
 
 
 def GetLeftTrigger():
+    _poll()
+    if _joydev is not None and _joydev.available:
+        value = _joydev.get_axis(_JS_LEFT_TRIGGER)
+        if value < TRIGGER_DEADZONE:
+            value = -1.0
+        return value
     LogErrorIfGamepadNotAvailable()
-    value = pr.get_gamepad_axis_movement(
-        CONTROLLER_ID, pr.GamepadAxis.GAMEPAD_AXIS_LEFT_TRIGGER
-    )
+    value = pr.get_gamepad_axis_movement(0, pr.GamepadAxis.GAMEPAD_AXIS_LEFT_TRIGGER)
     if value < TRIGGER_DEADZONE:
         value = -1.0
     return value
 
 
 def GetRightTrigger():
+    _poll()
+    if _joydev is not None and _joydev.available:
+        value = _joydev.get_axis(_JS_RIGHT_TRIGGER)
+        if value < TRIGGER_DEADZONE:
+            value = -1.0
+        return value
     LogErrorIfGamepadNotAvailable()
-    value = pr.get_gamepad_axis_movement(
-        CONTROLLER_ID, pr.GamepadAxis.GAMEPAD_AXIS_RIGHT_TRIGGER
-    )
+    value = pr.get_gamepad_axis_movement(0, pr.GamepadAxis.GAMEPAD_AXIS_RIGHT_TRIGGER)
     if value < TRIGGER_DEADZONE:
         value = -1.0
     return value
 
 
 def IsLeftStickPressed():
-    LogErrorIfGamepadNotAvailable()
-    return pr.is_gamepad_button_down(
-        CONTROLLER_ID, pr.GamepadButton.GAMEPAD_BUTTON_LEFT_THUMB
-    )
+    _poll()
+    if not GamepadAvailable():
+        return rl.IsKeyDown(rl.KEY_LEFT_SHIFT)
+    if _joydev is not None and _joydev.available:
+        return _joydev.get_button(_JS_BTN_LEFT_THUMB)
+    return pr.is_gamepad_button_down(0, pr.GamepadButton.GAMEPAD_BUTTON_LEFT_THUMB)
 
 
 def IsRightStickPressed():
-    LogErrorIfGamepadNotAvailable()
-    return pr.is_gamepad_button_down(
-        CONTROLLER_ID, pr.GamepadButton.GAMEPAD_BUTTON_RIGHT_THUMB
-    )
+    _poll()
+    if not GamepadAvailable():
+        return False
+    if _joydev is not None and _joydev.available:
+        return _joydev.get_button(_JS_BTN_RIGHT_THUMB)
+    return pr.is_gamepad_button_down(0, pr.GamepadButton.GAMEPAD_BUTTON_RIGHT_THUMB)
+
+
+def LogErrorIfGamepadNotAvailable():
+    if not GamepadAvailable():
+        print("Error: Gamepad not available")
 
 
 def IsL1Pressed():
@@ -167,19 +279,17 @@ def IsRightFaceLeftPressed():
     )
 
 
+def GetButtonA():
+    return rl.IsGamepadButtonDown(CONTROLLER_ID, rl.GAMEPAD_BUTTON_RIGHT_FACE_DOWN)
+
+
 def GetCurrentKey():
     key = rl.GetCharPressed()
     return chr(key) if (key >= 32) and (key <= 125) else None
-    # while key > 0:
-    #     if (key >= 32) and (key <= 125):
-    #         name += chr(key)
-    #         letter_count += 1
-    # key = rl.GetCharPressed()
 
 
 def GetKey(id):
     return rl.IsKeyPressed(id)
-
 
 def GetWASDQE():
     input = [0, 0, 0]

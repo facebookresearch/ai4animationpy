@@ -1,18 +1,17 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-import torch
 import os
 import sys
+from pathlib import Path
+
 import numpy as np
 import raylib as rl
-
-from pathlib import Path
+import torch
 
 SCRIPT_DIR = Path(__file__).parent
 ASSETS_PATH = str(SCRIPT_DIR.parent.parent / "_ASSETS_/Geno")
 
 sys.path.append(ASSETS_PATH)
 import Definitions
-
 from ai4animation import (
     Actor,
     AI4Animation,
@@ -27,8 +26,8 @@ from ai4animation import (
     Time,
     TimeSeries,
     Transform,
+    Utility,
     Vector3,
-    Utility
 )
 from LegIK import LegIK
 from Sequence import Sequence
@@ -45,6 +44,7 @@ CONTACT_POWER = 3.0
 CONTACT_THRESHOLD = 2.0 / 3.0
 
 # The locomotion system was trained on the Style100 dataset.
+
 
 class Program:
     def Start(self):
@@ -167,7 +167,11 @@ class Program:
         if AI4Animation.Standalone.IO.GamepadAvailable():
             left_stick = AI4Animation.Standalone.IO.GetLeftStick()
             right_stick = AI4Animation.Standalone.IO.GetRightStick()
-            speed = speed_sprint if AI4Animation.Standalone.IO.IsLeftStickPressed() else speed_normal
+            speed = (
+                speed_sprint
+                if AI4Animation.Standalone.IO.IsLeftStickPressed()
+                else speed_normal
+            )
 
             # Handle guidance selection with L1 and R1 buttons
             if AI4Animation.Standalone.IO.IsL1Pressed():
@@ -323,7 +327,9 @@ class Program:
         )
 
         raw_contacts = outputs.Read(4)
-        futureContacts = Utility.SmoothStep(raw_contacts, CONTACT_THRESHOLD, CONTACT_POWER)
+        futureContacts = Utility.SmoothStep(
+            raw_contacts, CONTACT_THRESHOLD, CONTACT_POWER
+        )
 
         futureGuidances = outputs.ReadVector3(self.Actor.GetBoneCount())
 

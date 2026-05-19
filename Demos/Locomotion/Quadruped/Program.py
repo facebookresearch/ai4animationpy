@@ -3,20 +3,19 @@
 # This demo is a rework of the MANN Siggraph 2018 paper "Mode adaptive Neural Networks for Quadruped Motion Control" by Starke et al.
 # The codebook matching model is trained on the same data as in the paper.
 
-import torch
 import os
 import sys
+from pathlib import Path
+
 import numpy as np
 import raylib as rl
-
-from pathlib import Path
+import torch
 
 SCRIPT_DIR = Path(__file__).parent
 ASSETS_PATH = str(SCRIPT_DIR.parent.parent / "_ASSETS_/Quadruped")
 
 sys.path.append(ASSETS_PATH)
 import Definitions
-
 from ai4animation import (
     Actor,
     AI4Animation,
@@ -24,6 +23,7 @@ from ai4animation import (
     FeedTensor,
     GuidanceModule,
     MotionModule,
+    PID,
     ReadTensor,
     RootModule,
     Rotation,
@@ -33,7 +33,6 @@ from ai4animation import (
     Transform,
     Utility,
     Vector3,
-    PID
 )
 from LegIK import LegIK
 from Sequence import Sequence
@@ -64,13 +63,16 @@ CHARACTER_MODELS = {
     "wolf": "Wolf.glb",
 }
 
+
 class Program:
     def __init__(self):
         self.Character = "dog"
         self.PIDHistoryLength = 48
 
     def CreateActor(self, character, visible):
-        actor = AI4Animation.Scene.AddEntity(f"Actor_{character.capitalize()}").AddComponent(
+        actor = AI4Animation.Scene.AddEntity(
+            f"Actor_{character.capitalize()}"
+        ).AddComponent(
             Actor,
             os.path.join(ASSETS_PATH, CHARACTER_MODELS[character]),
             Definitions.FULL_BODY_NAMES,
@@ -105,24 +107,32 @@ class Program:
     def ConfigureActorBindings(self):
         self.ContactIndices = self.Actor.GetBoneIndices(self.ContactBones)
 
-        self.LeftHandIK = LegIK(FABRIK(
+        self.LeftHandIK = LegIK(
+            FABRIK(
                 self.Actor.GetBone(Definitions.LeftForeArmName),
                 self.Actor.GetBone(Definitions.LeftHandSiteName),
-            ))
+            )
+        )
 
-        self.RightHandIK = LegIK(FABRIK(
+        self.RightHandIK = LegIK(
+            FABRIK(
                 self.Actor.GetBone(Definitions.RightForeArmName),
                 self.Actor.GetBone(Definitions.RightHandSiteName),
-            ))
+            )
+        )
 
-        self.LeftFootIK = LegIK(FABRIK(
+        self.LeftFootIK = LegIK(
+            FABRIK(
                 self.Actor.GetBone(Definitions.LeftKneeName),
                 self.Actor.GetBone(Definitions.LeftFootSiteName),
-            ))
-        self.RightFootIK = LegIK(FABRIK(
+            )
+        )
+        self.RightFootIK = LegIK(
+            FABRIK(
                 self.Actor.GetBone(Definitions.RightKneeName),
                 self.Actor.GetBone(Definitions.RightFootSiteName),
-            ))
+            )
+        )
 
     def SwitchCharacter(self, character):
         character = character.lower()
@@ -150,10 +160,14 @@ class Program:
         self.Actor = self.Actors[self.Character]
         AI4Animation.Standalone.Camera.SetTarget(self.Actor.Entity)
 
-        self.Model = torch.load(os.path.join(SCRIPT_DIR, "Network.pt"), weights_only=False)
+        self.Model = torch.load(
+            os.path.join(SCRIPT_DIR, "Network.pt"), weights_only=False
+        )
         self.Model.eval()
 
-        self.PostProcessor = torch.load(os.path.join(SCRIPT_DIR, "PostProcessor.pt"), weights_only=False)
+        self.PostProcessor = torch.load(
+            os.path.join(SCRIPT_DIR, "PostProcessor.pt"), weights_only=False
+        )
         self.PostProcessor.eval()
 
         self.SolverIterations = 1
@@ -291,13 +305,17 @@ class Program:
             move_axes = Vector3.Create(keyboard_move[0], 0, keyboard_move[2])
             if keyboard_move[1] != 0:
                 self.RotationIntegral += 120.0 * keyboard_move[1] * Time.DeltaTime
-                move_axes = Vector3.DirectionFrom(move_axes, Rotation.Euler(0, self.RotationIntegral, 0))
+                move_axes = Vector3.DirectionFrom(
+                    move_axes, Rotation.Euler(0, self.RotationIntegral, 0)
+                )
             else:
                 self.RotationIntegral = 0.0
             move_axes = [move_axes[0], move_axes[2]]
 
             if Vector3.Length(keyboard_move) > INPUT_DEADZONE:
-                desired_speed = LOCOMOTION_MODES[self._select_locomotion_mode_keyboard()]
+                desired_speed = LOCOMOTION_MODES[
+                    self._select_locomotion_mode_keyboard()
+                ]
             else:
                 desired_speed = 0.0
 
@@ -314,7 +332,9 @@ class Program:
         target_speed = 0.0 if action_pose_active else desired_speed
 
         # Smooth target speed with PID and clamp to valid locomotion range
-        speed = current_speed + self.PID(current_speed, Time.DeltaTime, setpoint=target_speed)
+        speed = current_speed + self.PID(
+            current_speed, Time.DeltaTime, setpoint=target_speed
+        )
         # speed = Tensor.Clamp(speed, 0.0, LOCOMOTION_MODES["canter"])
         speed = max(speed, 0.0)
 
@@ -328,7 +348,9 @@ class Program:
         )
         move_vector_length = Vector3.Length(move_vector)
         move_direction = (
-            Vector3.Zero() if move_vector_length == 0.0 else move_vector / move_vector_length
+            Vector3.Zero()
+            if move_vector_length == 0.0
+            else move_vector / move_vector_length
         )
 
         if action_pose_active:
@@ -348,12 +370,7 @@ class Program:
         )
 
         # Simulation
-        self.SimulationObject.Control(
-            position,
-            direction,
-            velocity,
-            Time.DeltaTime
-        )
+        self.SimulationObject.Control(position, direction, velocity, Time.DeltaTime)
 
         speed = Vector3.Length(velocity)
         if sit_active:
@@ -364,17 +381,19 @@ class Program:
             guidance_state = "Stand"
         elif speed < 0.1:
             guidance_state = "Sit" if self.Sequence is None else "Idle"
-        elif speed < LOCOMOTION_MODES['pace']:
+        elif speed < LOCOMOTION_MODES["pace"]:
             guidance_state = "Walk"
-        elif speed < LOCOMOTION_MODES['trot']:
+        elif speed < LOCOMOTION_MODES["trot"]:
             guidance_state = "Pace"
-        elif speed < LOCOMOTION_MODES['canter']:
+        elif speed < LOCOMOTION_MODES["canter"]:
             guidance_state = "Trot"
         else:
             guidance_state = "Canter"
 
         self.CurrentGuidanceState = guidance_state
-        self.GuidanceControl.Positions = self.GuidanceTemplates[guidance_state].Positions.copy()
+        self.GuidanceControl.Positions = self.GuidanceTemplates[
+            guidance_state
+        ].Positions.copy()
 
         self.RootControl.Transforms = self.SimulationObject.Transforms.copy()
         self.RootControl.Velocities = self.SimulationObject.Velocities.copy()
@@ -432,8 +451,7 @@ class Program:
         inputs.Feed(self.GuidanceControl.Positions)
 
         outputs = self.Model(
-            inputs.GetTensor().reshape(1, -1),
-            iterations=self.NetworkIterations
+            inputs.GetTensor().reshape(1, -1), iterations=self.NetworkIterations
         )
         outputs = outputs.reshape(SEQUENCE_LENGTH, -1)
         outputs = ReadTensor("Y", Tensor.ToNumPy(outputs))
@@ -656,9 +674,15 @@ class Program:
             "Current Seq", 0.8, 0.55, 0.15, 0.04, state=False
         )
 
-        self.SliderKp = AI4Animation.GUI.Slider(0.8, 0.82, 0.15, 0.03, self.PID.Kp, 0.0, 5.0)
-        self.SliderKi = AI4Animation.GUI.Slider(0.8, 0.87, 0.15, 0.03, self.PID.Ki, 0.0, 5.0)
-        self.SliderKd = AI4Animation.GUI.Slider(0.8, 0.92, 0.15, 0.03, self.PID.Kd, 0.0, 5.0)
+        self.SliderKp = AI4Animation.GUI.Slider(
+            0.8, 0.82, 0.15, 0.03, self.PID.Kp, 0.0, 5.0
+        )
+        self.SliderKi = AI4Animation.GUI.Slider(
+            0.8, 0.87, 0.15, 0.03, self.PID.Ki, 0.0, 5.0
+        )
+        self.SliderKd = AI4Animation.GUI.Slider(
+            0.8, 0.92, 0.15, 0.03, self.PID.Kd, 0.0, 5.0
+        )
 
     def Draw(self):
         self.SimulationObject.Draw()
@@ -804,7 +828,6 @@ class Program:
             frameColor=AI4Animation.Color.WHITE,
         )
 
-
         # self.SliderKp.GUI()
         # self.SliderKi.GUI()
         # self.SliderKd.GUI()
@@ -838,6 +861,7 @@ class Program:
         self.DrawGuidanceControl.GUI()
         self.DrawPreviousSequence.GUI()
         self.DrawCurrentSequence.GUI()
+
 
 if __name__ == "__main__":
     AI4Animation(Program())

@@ -156,7 +156,7 @@ class Model(nn.Module):
         estimate = self.Codebook(self.Estimator(input), sample=False)
 
         # Denoise
-        U = torch.rand(1).to(target.device)
+        U = torch.rand(1, device=target.device)
         seed = (1 - U) * target + U * codes
         denoised = self.Codebook(
             self.Denoiser(torch.cat((seed, input), -1)), sample=False
@@ -172,7 +172,9 @@ class Model(nn.Module):
         return None, loss
 
     def timing(self):
-        return torch.linspace(0.0, self.SequenceWindow, self.SequenceLength)
+        return torch.linspace(0.0, self.SequenceWindow, self.SequenceLength).reshape(
+            -1, 1
+        )
 
 
 # # Outputs=[Batch, Sequence, OutputDim]
@@ -337,7 +339,7 @@ class Model(nn.Module):
 #         self.train()
 
 #         # Denoiser
-#         U = torch.rand(1).to(target.device)
+#         U = torch.rand(1, device=target.device)
 #         seed = (1 - U) * target + U * source
 #         denoised = self.Prior.manifold(
 #             self.Denoiser(seed, input), False
