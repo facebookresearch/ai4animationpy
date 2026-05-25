@@ -470,7 +470,8 @@ def Inverse(tensor):
         return torch.inverse(tensor)
 
 
-def All(expression, backend):
+def All(expression, backend=None):
+    backend = TensorBackend if backend is None else backend
     if backend == Backend.NumPy:
         return np.all(expression)
     if backend == Backend.PyTorch:

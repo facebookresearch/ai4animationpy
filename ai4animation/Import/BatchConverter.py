@@ -211,7 +211,7 @@ def main():
         bone_names = module.FULL_BODY_NAMES
 
     floor = None
-    bvh_scale = None
+    bvh_scale = 0.01
     bvh_mirror_axis = None
     bvh_joint_corrections = None
 

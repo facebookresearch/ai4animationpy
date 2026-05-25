@@ -59,11 +59,11 @@ class Sequence:
             0.0,
             self.Timestamps.size - 1,
         )
-        ratio = Tensor.Clamp(ratio, 0.0, self.Timestamps.size - 1)
+        ratio = Tensor.Clamp(ratio, 0.0, self.Timestamps.size - 1).item()
         a = int(math.floor(ratio))
         b = int(math.ceil(ratio))
         w = Utility.Ratio(timestamp, self.Timestamps[a], self.Timestamps[b])
-        w = Tensor.Clamp(w, 0.0, 1.0)
+        w = Tensor.Clamp(w, 0.0, 1.0).item()
         return a, b, w
 
     def GetLength(self):

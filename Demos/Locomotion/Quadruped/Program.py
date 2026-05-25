@@ -179,7 +179,6 @@ class Program:
         self.Synchronization = 1.0
 
         self.TrajectoryCorrection = 0.1
-        self.GuidanceCorrection = 0.1
         self.ContactPower = 2.0
 
         self.PID = PID(kp=2.0, ki=0.03, kd=0.0)
@@ -255,7 +254,7 @@ class Program:
     def GetCurrentSpeed(self):
         if self.Sequence is None:
             return 0.0
-        return float(self.Sequence.GetLength() / SEQUENCE_WINDOW)
+        return float((self.Sequence.GetLength() / SEQUENCE_WINDOW).item())
 
     def _UpdatePIDSpeedHistory(self, current_speed, target_speed, pid_speed):
         self.PIDSpeedHistory = np.roll(self.PIDSpeedHistory, -1, axis=1)
@@ -418,12 +417,6 @@ class Program:
                 self.Sequence.Trajectory.Velocities,
                 self.TrajectoryCorrection,
             )
-            # Guidance
-            self.GuidanceControl.Positions = Vector3.Lerp(
-                self.GuidanceControl.Positions,
-                self.Sequence.SampleGuidance(0.0),
-                self.GuidanceCorrection,
-            )
 
     def Predict(self):
         inputs = FeedTensor("X", self.Model.input_dim())
@@ -484,8 +477,6 @@ class Program:
             futureRootTransforms.reshape(SEQUENCE_LENGTH, 1, 4, 4),
         )
 
-        futureGuidances = outputs.ReadVector3(self.Actor.GetBoneCount())
-
         self.Previous = self.Sequence
         self.Sequence = Sequence()
         self.Previous = self.Sequence if self.Previous is None else self.Previous
@@ -501,7 +492,6 @@ class Program:
             futureMotionTransforms,
             futureMotionVelocities,
         )
-        self.Sequence.Guidances = futureGuidances
 
         # Predict Contacts
         inputs = FeedTensor("X", self.PostProcessor.input_dim())
@@ -690,7 +680,7 @@ class Program:
         if self.DrawRootControl.Active:
             self.RootControl.Draw()
         if self.DrawGuidanceControl.Active:
-            self.GuidanceControl.Draw(self.Actor)
+            self.GuidanceControl.DrawLegacy(self.Actor)
         if self.DrawPreviousSequence.Active:
             self.Previous.Draw(self.Actor, AI4Animation.Color.RED)
         if self.DrawCurrentSequence.Active:
