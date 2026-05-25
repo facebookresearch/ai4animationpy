@@ -476,7 +476,7 @@ class Program:
         if self.DrawRootControl.Active:
             self.RootControl.Draw()
         if self.DrawGuidanceControl.Active:
-            self.GuidanceControl.Draw(self.Actor)
+            self.GuidanceControl.DrawLegacy(self.Actor)
         if self.DrawPreviousSequence.Active:
             self.Previous.Draw(self.Actor, AI4Animation.Color.RED)
         if self.DrawCurrentSequence.Active:
