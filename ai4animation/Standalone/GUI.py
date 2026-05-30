@@ -496,7 +496,11 @@ class Rectangle:
         return Rectangle(x, y, w, h)
 
     def Tuple(self):
-        return (self.x, self.y, self.width, self.height)
+        def to_scalar(v):
+            if hasattr(v, "item"):
+                return v.item()
+            return float(v)
+        return (to_scalar(self.x), to_scalar(self.y), to_scalar(self.width), to_scalar(self.height))
 
     def Copy(self):
         return Rectangle(self.x, self.y, self.width, self.height)
