@@ -143,7 +143,7 @@ class GuidanceModule(Module):
                         self.Slider_Smooth.GetValue(),
                         editor.TimeSeries.SampleCount,
                     ),
-                    self.Motion.Hierarchy.BoneNames,
+                    editor.Actor.GetBoneNames(),
                 )
                 guidance.DrawLegacy(editor.Actor)
                 if self.Button_Save.IsPressed():

@@ -9,16 +9,16 @@ from . import AI, Animation, Components, IK, Import, Math, Time, Utility
 
 # AI modules
 from .AI import DataSampler, FeedTensor, Generators, Plotting, ReadTensor
+from .AI.Library import Losses
 from .AI.Library.Statistics import RunningStatistics
 from .AI.Models import (
     Autoencoder,
     CategoricalEncoderDecoder,
-    CodebookMatching,
     SequentialMLP,
     CxM,
     MultiLayerPerceptron,
 )
-
+from .AI.Optimizers.AdamWR import AdamW, CyclicScheduler
 from .AI.Optimizers.CosineAnnealingOptimizer import CosineAnnealingOptimizer
 
 # Core classes (imported after subpackages to avoid circular dependencies)
@@ -95,7 +95,7 @@ __all__ = [
     "Component",
     "Actor",
     "MotionEditor",
-    "Dataset",
+    "MeshRenderer",
     # IK
     "FABRIK",
     # Import
@@ -104,8 +104,16 @@ __all__ = [
     "DataSampler",
     "Generators",
     "Plotting",
+    "RunningStatistics",
+    "Autoencoder",
+    "CategoricalEncoderDecoder",
+    "SequentialMLP",
+    "CxM",
+    "MultiLayerPerceptron",
     "AdamW",
     "CyclicScheduler",
+    "CosineAnnealingOptimizer",
+    "Losses",
     # Math
     "Tensor",
     "Transform",

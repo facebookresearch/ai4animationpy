@@ -23,23 +23,25 @@ class MirrorModule(Module):
     ) -> None:
         super().__init__(motion)
 
-        self.MirrorAxis = axis
+        symmetry = self.DetectSymmetry(self.Motion.Hierarchy.BoneNames)
 
-        self.Symmetry = self.DetectSymmetry(self.Motion.Hierarchy.BoneNames)
-
-        self.Correctives = Rotation.Euler(Vector3.Zero(len(motion.Hierarchy.BoneNames)))
-
-        for i, sym_idx in enumerate(self.Symmetry):
+        correctives = Rotation.Euler(Vector3.Zero(len(motion.Hierarchy.BoneNames)))
+        for i, sym_idx in enumerate(symmetry):
             if map is MirrorModule.Map.Symmetric:
                 if i != sym_idx:
-                    self.Correctives[i] = Rotation.Euler(correction)
+                    correctives[i] = Rotation.Euler(correction)
             if map is MirrorModule.Map.All:
-                self.Correctives[i] = Rotation.Euler(correction)
+                correctives[i] = Rotation.Euler(correction)
 
         for k, v in overrides.items():
-            self.Correctives[self.Motion.Hierarchy.GetBoneIndex([k])] = (
+            correctives[self.Motion.Hierarchy.GetBoneIndex([k])] = (
                 Rotation.Euler(v)
                 )
+
+        transforms = Transform.GetMirror(self.Motion.Frames, axis)
+        delta = Transform.R(correctives[symmetry]).reshape(1, -1, 4, 4)
+        transforms = Transform.Multiply(transforms, delta)
+        self.Transforms = transforms[:, symmetry]
 
     def Initialize(self):
         pass
@@ -48,14 +50,7 @@ class MirrorModule(Module):
         return "Mirror"
 
     def GetBoneTransformations(self, frame_indices, bone_indices):
-        bone_indices = [self.Symmetry[x] for x in bone_indices]
-        transforms = self.Motion.Frames[frame_indices][:, bone_indices]
-        transforms = Transform.GetMirror(transforms, self.MirrorAxis)
-        local_update = Transform.R(
-            self.Correctives[bone_indices],
-        ).reshape(1, len(bone_indices), 4, 4)
-        transforms = Transform.Multiply(transforms, local_update)
-        return transforms
+        return self.Transforms[frame_indices][:, bone_indices]
 
     def GUI(self, editor):
         if Module.Visualize[MirrorModule]:
